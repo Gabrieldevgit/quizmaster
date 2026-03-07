@@ -1,0 +1,3032 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizMaster</title>
+
+    <!-- Firebase SDK (compat v9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; line-height:1.6; }
+        .hidden { display:none !important; }
+        @keyframes fade-in { from{opacity:0;transform:translateY(-20px);}to{opacity:1;transform:translateY(0);} }
+        @keyframes slide-up { from{opacity:0;transform:translateY(40px);}to{opacity:1;transform:translateY(0);} }
+        @keyframes spin { to{transform:rotate(360deg);} }
+        .animate-fade-in { animation:fade-in 0.8s ease-out; }
+        .animate-slide-up { animation:slide-up 0.8s ease-out 0.2s both; }
+
+        /* Loading overlay */
+        #loading-overlay { position:fixed;inset:0;background:linear-gradient(135deg,#f8fafc,#e0f2fe);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999; }
+        .spinner { width:56px;height:56px;border:5px solid #e2e8f0;border-top-color:#4f46e5;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:1.5rem; }
+        #loading-overlay p { color:#475569;font-size:1.125rem; }
+
+        /* User Form */
+        #user-form-view { min-height:100vh;background:linear-gradient(135deg,#f8fafc 0%,#e0f2fe 50%,#e0e7ff 100%);display:flex;align-items:center;justify-content:center;padding:1rem; }
+        .form-container { width:100%;max-width:42rem; }
+        .main-title { text-align:center;margin-bottom:3rem; }
+        .main-title h1 { font-size:4.5rem;font-weight:700;margin-bottom:1rem;background:linear-gradient(to right,#4f46e5,#2563eb,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.05em; }
+        .main-title p { font-size:1.25rem;color:#475569; }
+        .form-card { background:white;border-radius:1.5rem;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);padding:3rem;border:1px solid #e2e8f0; }
+        .form-group { margin-bottom:2rem; }
+        .form-label { display:block;font-size:0.75rem;font-weight:500;color:#334155;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem; }
+        .form-input,.form-textarea { width:100%;padding:1rem 1.5rem;border:2px solid #e2e8f0;border-radius:1rem;font-size:1.125rem;transition:all 0.3s;font-family:inherit; }
+        .form-input:focus,.form-textarea:focus { outline:none;border-color:#6366f1; }
+        .form-textarea { resize:none; }
+        .btn-primary { width:100%;background:linear-gradient(to right,#4f46e5,#2563eb);color:white;padding:1.25rem;border-radius:1rem;font-weight:600;font-size:1.125rem;border:none;cursor:pointer;transition:all 0.3s; }
+        .btn-primary:hover { transform:scale(1.02);box-shadow:0 20px 40px rgba(79,70,229,0.4); }
+        .btn-admin-link { width:100%;margin-top:1.5rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;color:#64748b;padding:0.75rem;background:none;border:none;cursor:pointer;transition:color 0.3s; }
+        .btn-admin-link:hover { color:#4f46e5; }
+
+        /* Admin Login */
+        #admin-login-view { min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#312e81 50%,#1e3a8a 100%);display:flex;align-items:center;justify-content:center;padding:1rem; }
+        .admin-login-container { width:100%;max-width:28rem; }
+        .admin-header { text-align:center;margin-bottom:2rem; }
+        .admin-icon { width:4rem;height:4rem;margin:0 auto 1rem;color:#818cf8; }
+        .admin-header h2 { font-size:1.875rem;font-weight:700;color:white;margin-bottom:0.5rem; }
+        .admin-header p { color:#a5b4fc; }
+        .admin-card { background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);border-radius:1.5rem;padding:2rem;border:1px solid rgba(255,255,255,0.2); }
+        .admin-input { width:100%;padding:0.75rem 1rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:0.75rem;color:white;font-size:1rem;margin-bottom:1rem; }
+        .admin-input::placeholder { color:#a5b4fc; }
+        .admin-input:focus { outline:none;border-color:#818cf8; }
+        .btn-admin-login { width:100%;background:linear-gradient(to right,#6366f1,#3b82f6);color:white;padding:1rem;border-radius:0.75rem;font-weight:600;border:none;cursor:pointer;transition:all 0.3s; }
+        .btn-admin-login:hover { transform:scale(1.02); }
+        .btn-back { width:100%;margin-top:1rem;color:#a5b4fc;background:none;border:none;cursor:pointer;font-size:0.875rem;padding:0.5rem; }
+        .btn-back:hover { color:white; }
+
+        /* Quiz List */
+        #quiz-list-view { min-height:100vh;background:linear-gradient(135deg,#f8fafc 0%,#e0f2fe 50%,#e0e7ff 100%);padding:2rem; }
+        .quiz-list-container { max-width:72rem;margin:0 auto; }
+        .quiz-header { text-align:center;margin-bottom:3rem; }
+        .quiz-header h1 { font-size:3.75rem;font-weight:700;margin-bottom:1rem;background:linear-gradient(to right,#4f46e5,#2563eb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
+        .quiz-header p { font-size:1.25rem;color:#475569; }
+        .quiz-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:2rem; }
+        .quiz-card { background:white;border-radius:1.5rem;padding:2rem;box-shadow:0 10px 30px rgba(0,0,0,0.1);border:2px solid transparent;cursor:pointer;transition:all 0.3s; }
+        .quiz-card:hover { transform:scale(1.03);box-shadow:0 20px 40px rgba(0,0,0,0.15);border-color:#818cf8; }
+        .quiz-card h3 { font-size:1.5rem;font-weight:700;color:#1e293b;margin-bottom:0.75rem; }
+        .quiz-card p { color:#475569;margin-bottom:1rem; }
+        .quiz-card-footer { display:flex;justify-content:space-between;align-items:center;font-size:0.875rem;color:#64748b; }
+        .quiz-card-footer .start-text { color:#4f46e5;font-weight:600; }
+
+        /* Quiz */
+        #quiz-view { min-height:100vh;background:linear-gradient(135deg,#4f46e5 0%,#2563eb 50%,#06b6d4 100%);padding:2rem;display:flex;align-items:center;justify-content:center; }
+        .quiz-container { width:100%;max-width:56rem; }
+        .quiz-progress { margin-bottom:2rem;text-align:center;color:white; }
+        .progress-text { font-size:0.875rem;font-weight:500;margin-bottom:0.5rem;opacity:0.8; }
+        .progress-bar-bg { width:100%;background:rgba(255,255,255,0.2);border-radius:9999px;height:0.5rem;overflow:hidden; }
+        .progress-bar { height:100%;background:white;border-radius:9999px;transition:width 0.5s; }
+        .question-card { background:white;border-radius:1.5rem;padding:3rem;box-shadow:0 25px 50px rgba(0,0,0,0.2); }
+        .question-text { font-size:2rem;font-weight:700;color:#1e293b;margin-bottom:2rem;line-height:1.3; }
+        .answers-list { margin-bottom:2rem; }
+        .answer-btn { width:100%;padding:1.25rem 1.5rem;margin-bottom:1rem;border-radius:1rem;border:3px solid #e2e8f0;background:#f8fafc;color:#1e293b;font-size:1.125rem;font-weight:500;text-align:left;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;gap:0.75rem; }
+        .answer-btn:hover { border-color:#818cf8; }
+        .answer-btn.selected { background:#4f46e5;color:white;border-color:#4f46e5;transform:scale(1.02); }
+        .answer-radio { width:1.5rem;height:1.5rem;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+        .answer-btn.selected .answer-radio { border-color:white;background:white; }
+        .answer-radio-dot { width:0.75rem;height:0.75rem;border-radius:50%;background:#4f46e5;display:none; }
+        .answer-btn.selected .answer-radio-dot { display:block; }
+        .btn-next { width:100%;background:linear-gradient(to right,#4f46e5,#2563eb);color:white;padding:1.25rem;border-radius:1rem;font-weight:600;font-size:1.125rem;border:none;cursor:pointer;transition:all 0.3s; }
+        .btn-next:hover:not(:disabled) { transform:scale(1.02); }
+        .btn-next:disabled { opacity:0.5;cursor:not-allowed; }
+
+        /* Result */
+        #result-view { min-height:100vh;background:linear-gradient(135deg,#f8fafc 0%,#e0f2fe 50%,#e0e7ff 100%);padding:2rem;display:flex;align-items:center;justify-content:center; }
+        .result-container { width:100%;max-width:42rem;text-align:center; }
+        .result-card { background:white;border-radius:1.5rem;padding:3rem;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); }
+        .result-icon { width:6rem;height:6rem;margin:0 auto 2rem; }
+        .result-icon.success { color:#22c55e; }
+        .result-icon.partial { color:#f97316; }
+        .result-title { font-size:2.5rem;font-weight:700;color:#1e293b;margin-bottom:1rem; }
+        .percentage-circle { width:200px;height:200px;margin:2rem auto;position:relative; }
+        .percentage-circle svg { transform:rotate(-90deg); }
+        .percentage-circle-bg { fill:none;stroke:#e2e8f0;stroke-width:12; }
+        .percentage-circle-progress { fill:none;stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset 1s ease-out; }
+        .percentage-circle-progress.good { stroke:#22c55e; }
+        .percentage-circle-progress.partial { stroke:#f97316; }
+        .percentage-text { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:3rem;font-weight:700;background:linear-gradient(to right,#4f46e5,#2563eb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
+        .result-details { background:#f8fafc;border-radius:1rem;padding:1.5rem;margin-bottom:2rem;display:flex;justify-content:space-around;gap:1rem; }
+        .result-stat { text-align:center; }
+        .result-stat-value { font-size:2rem;font-weight:700;color:#1e293b; }
+        .result-stat-label { font-size:0.875rem;color:#64748b;text-transform:uppercase;margin-top:0.25rem; }
+        .result-buttons { display:flex;flex-direction:column;gap:1rem; }
+        .btn-secondary { width:100%;background:#f1f5f9;color:#334155;padding:1rem;border-radius:1rem;font-weight:600;font-size:1.125rem;border:none;cursor:pointer;transition:all 0.3s; }
+        .btn-secondary:hover { background:#e2e8f0; }
+        .result-percentage { font-size:1rem;color:#475569;margin-bottom:1rem;white-space:pre-line; }
+
+        /* Revisions */
+        #revisions-view { min-height:100vh;background:linear-gradient(135deg,#f8fafc 0%,#fce7f3 50%,#ede9fe 100%);padding:2rem; }
+
+
+        /* ═══════════════════════════════════════════════
+           NEW ADMIN PANEL — GOD TIER
+        ═══════════════════════════════════════════════ */
+        #admin-view { display:flex; flex-direction:column; min-height:100vh; background:#0b1120; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; }
+
+        /* Top Bar */
+        .ap-topbar { height:60px; background:#111827; border-bottom:1px solid #1f2d3d; display:flex; align-items:center; justify-content:space-between; padding:0 1.5rem; flex-shrink:0; z-index:50; }
+        .ap-topbar-left { display:flex; align-items:center; gap:1rem; }
+        .ap-logo { font-size:1.25rem; font-weight:800; background:linear-gradient(135deg,#6366f1,#06b6d4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+        .ap-topbar-search { display:flex; align-items:center; gap:0.5rem; background:#1e293b; border:1px solid #334155; border-radius:0.625rem; padding:0.4rem 0.875rem; width:260px; }
+        .ap-topbar-search input { background:none; border:none; color:#cbd5e1; font-size:0.875rem; width:100%; outline:none; }
+        .ap-topbar-search input::placeholder { color:#475569; }
+        .ap-topbar-right { display:flex; align-items:center; gap:0.75rem; }
+        .ap-badge { background:#4f46e5; color:white; font-size:0.7rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:9999px; }
+        .ap-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#06b6d4); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:0.875rem; cursor:pointer; }
+        .ap-topbar-btn { background:none; border:none; color:#94a3b8; cursor:pointer; padding:0.4rem; border-radius:0.5rem; font-size:1.1rem; transition:all 0.2s; }
+        .ap-topbar-btn:hover { background:#1e293b; color:white; }
+
+        /* Shell */
+        .ap-shell { display:flex; flex:1; overflow:hidden; height:calc(100vh - 60px); }
+
+        /* Sidebar */
+        .ap-sidebar { width:220px; background:#111827; border-right:1px solid #1f2d3d; display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; transition:width 0.3s; }
+        .ap-sidebar.collapsed { width:60px; }
+        .ap-sidebar-section { padding:1rem 0.75rem 0.5rem; }
+        .ap-sidebar-label { font-size:0.65rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.1em; padding:0 0.5rem; margin-bottom:0.5rem; white-space:nowrap; overflow:hidden; }
+        .ap-nav-item { display:flex; align-items:center; gap:0.75rem; padding:0.625rem 0.75rem; border-radius:0.625rem; cursor:pointer; transition:all 0.2s; margin-bottom:0.125rem; border:none; background:none; width:100%; text-align:left; color:#94a3b8; font-size:0.875rem; font-weight:500; white-space:nowrap; }
+        .ap-nav-item:hover { background:#1e293b; color:#e2e8f0; }
+        .ap-nav-item.active { background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(6,182,212,0.1)); color:#a5b4fc; border:1px solid rgba(99,102,241,0.3); }
+        .ap-nav-icon { font-size:1.1rem; flex-shrink:0; width:20px; text-align:center; }
+        .ap-nav-text { overflow:hidden; }
+        .ap-sidebar-bottom { margin-top:auto; padding:0.75rem; border-top:1px solid #1f2d3d; }
+        .ap-sidebar-bottom .ap-nav-item { color:#64748b; }
+        .ap-sidebar-bottom .ap-nav-item:hover { color:#f87171; background:rgba(239,68,68,0.1); }
+
+        /* Main */
+        .ap-main { flex:1; overflow-y:auto; padding:1.75rem; background:#0b1120; }
+        .ap-section { display:none; }
+        .ap-section.active { display:block; }
+        .ap-section-title { font-size:1.625rem; font-weight:700; color:white; margin-bottom:0.375rem; }
+        .ap-section-subtitle { font-size:0.875rem; color:#475569; margin-bottom:1.75rem; }
+
+        /* Stat Cards */
+        .ap-stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; margin-bottom:1.75rem; }
+        .ap-stat-card { background:#111827; border:1px solid #1f2d3d; border-radius:0.875rem; padding:1.25rem 1.5rem; position:relative; overflow:hidden; }
+        .ap-stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; border-radius:0.875rem 0.875rem 0 0; }
+        .ap-stat-card.indigo::before { background:linear-gradient(to right,#6366f1,#8b5cf6); }
+        .ap-stat-card.cyan::before { background:linear-gradient(to right,#06b6d4,#3b82f6); }
+        .ap-stat-card.green::before { background:linear-gradient(to right,#22c55e,#16a34a); }
+        .ap-stat-card.amber::before { background:linear-gradient(to right,#f59e0b,#f97316); }
+        .ap-stat-card.rose::before { background:linear-gradient(to right,#f43f5e,#ec4899); }
+        .ap-stat-card.purple::before { background:linear-gradient(to right,#8b5cf6,#6366f1); }
+        .ap-stat-label { font-size:0.75rem; color:#475569; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; margin-bottom:0.75rem; }
+        .ap-stat-value { font-size:2rem; font-weight:800; color:white; line-height:1; }
+        .ap-stat-sub { font-size:0.75rem; color:#64748b; margin-top:0.375rem; }
+        .ap-stat-icon { position:absolute; top:1.25rem; right:1.25rem; font-size:1.5rem; opacity:0.3; }
+
+        /* Panels / Cards */
+        .ap-card { background:#111827; border:1px solid #1f2d3d; border-radius:0.875rem; padding:1.5rem; margin-bottom:1.25rem; }
+        .ap-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; }
+        .ap-card-title { font-size:1rem; font-weight:700; color:white; }
+        .ap-card-subtitle { font-size:0.75rem; color:#475569; margin-top:0.125rem; }
+
+        /* Charts */
+        .ap-charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.75rem; }
+        @media(max-width:900px){ .ap-charts-grid { grid-template-columns:1fr; } }
+        .ap-bar-chart { display:flex; flex-direction:column; gap:0.625rem; }
+        .ap-bar-row { display:flex; align-items:center; gap:0.75rem; }
+        .ap-bar-label { font-size:0.75rem; color:#64748b; width:80px; text-align:right; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ap-bar-track { flex:1; height:8px; background:#1e293b; border-radius:9999px; overflow:hidden; }
+        .ap-bar-fill { height:100%; border-radius:9999px; transition:width 1s ease-out; }
+        .ap-bar-fill.indigo { background:linear-gradient(to right,#6366f1,#8b5cf6); }
+        .ap-bar-fill.cyan { background:linear-gradient(to right,#06b6d4,#3b82f6); }
+        .ap-bar-fill.green { background:linear-gradient(to right,#22c55e,#16a34a); }
+        .ap-bar-fill.amber { background:linear-gradient(to right,#f59e0b,#f97316); }
+        .ap-bar-fill.rose { background:linear-gradient(to right,#f43f5e,#ec4899); }
+        .ap-bar-val { font-size:0.75rem; color:#94a3b8; width:40px; flex-shrink:0; }
+
+        /* Activity Feed */
+        .ap-activity-item { display:flex; gap:0.75rem; padding:0.625rem 0; border-bottom:1px solid #1a2332; }
+        .ap-activity-item:last-child { border-bottom:none; }
+        .ap-activity-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:0.375rem; }
+        .ap-activity-dot.green { background:#22c55e; }
+        .ap-activity-dot.blue { background:#3b82f6; }
+        .ap-activity-dot.purple { background:#8b5cf6; }
+        .ap-activity-dot.amber { background:#f59e0b; }
+        .ap-activity-text { font-size:0.8rem; color:#94a3b8; }
+        .ap-activity-text strong { color:#e2e8f0; }
+        .ap-activity-time { font-size:0.7rem; color:#475569; margin-top:0.125rem; }
+
+        /* Tables */
+        .ap-table-wrap { overflow-x:auto; border-radius:0.75rem; border:1px solid #1f2d3d; }
+        .ap-table { width:100%; border-collapse:collapse; font-size:0.875rem; }
+        .ap-table thead { background:#0f1929; }
+        .ap-table th { padding:0.875rem 1.25rem; text-align:left; font-size:0.7rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap; }
+        .ap-table tbody tr { border-top:1px solid #1a2332; transition:background 0.15s; }
+        .ap-table tbody tr:hover { background:rgba(255,255,255,0.03); }
+        .ap-table td { padding:0.875rem 1.25rem; color:#cbd5e1; vertical-align:middle; }
+        .ap-table td.bold { color:white; font-weight:600; }
+
+        /* Badges */
+        .badge { display:inline-flex; align-items:center; padding:0.2rem 0.625rem; border-radius:9999px; font-size:0.7rem; font-weight:700; letter-spacing:0.03em; }
+        .badge-green { background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); }
+        .badge-amber { background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); }
+        .badge-red { background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); }
+        .badge-blue { background:rgba(59,130,246,0.15); color:#93c5fd; border:1px solid rgba(59,130,246,0.3); }
+        .badge-purple { background:rgba(139,92,246,0.15); color:#c4b5fd; border:1px solid rgba(139,92,246,0.3); }
+        .badge-gray { background:rgba(100,116,139,0.15); color:#94a3b8; border:1px solid rgba(100,116,139,0.3); }
+
+        /* Buttons */
+        .ap-btn { display:inline-flex; align-items:center; gap:0.5rem; padding:0.5rem 1rem; border-radius:0.625rem; border:none; cursor:pointer; font-size:0.875rem; font-weight:600; transition:all 0.2s; }
+        .ap-btn-primary { background:#4f46e5; color:white; }
+        .ap-btn-primary:hover { background:#4338ca; transform:translateY(-1px); }
+        .ap-btn-secondary { background:#1e293b; color:#cbd5e1; border:1px solid #334155; }
+        .ap-btn-secondary:hover { background:#334155; color:white; }
+        .ap-btn-danger { background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); }
+        .ap-btn-danger:hover { background:rgba(239,68,68,0.25); }
+        .ap-btn-success { background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); }
+        .ap-btn-success:hover { background:rgba(34,197,94,0.25); }
+        .ap-btn-sm { padding:0.3rem 0.625rem; font-size:0.75rem; }
+        .ap-btn-icon { padding:0.375rem; border-radius:0.5rem; background:none; border:none; cursor:pointer; color:#64748b; transition:all 0.2s; }
+        .ap-btn-icon:hover { background:#1e293b; color:#e2e8f0; }
+        .ap-btn-icon.red:hover { color:#f87171; background:rgba(239,68,68,0.1); }
+        .ap-btn-icon.blue:hover { color:#93c5fd; background:rgba(59,130,246,0.1); }
+        .ap-btn-icon.green:hover { color:#4ade80; background:rgba(34,197,94,0.1); }
+
+        /* Form controls inside admin */
+        .ap-input { background:#1e293b; border:1px solid #334155; border-radius:0.625rem; color:white; padding:0.625rem 0.875rem; font-size:0.875rem; font-family:inherit; outline:none; transition:border-color 0.2s; }
+        .ap-input:focus { border-color:#6366f1; }
+        .ap-input::placeholder { color:#475569; }
+        .ap-select { background:#1e293b; border:1px solid #334155; border-radius:0.625rem; color:#cbd5e1; padding:0.625rem 0.875rem; font-size:0.875rem; font-family:inherit; outline:none; cursor:pointer; }
+        .ap-textarea { background:#1e293b; border:1px solid #334155; border-radius:0.625rem; color:white; padding:0.625rem 0.875rem; font-size:0.875rem; font-family:inherit; outline:none; resize:vertical; width:100%; transition:border-color 0.2s; }
+        .ap-textarea:focus { border-color:#6366f1; }
+        .ap-label { display:block; font-size:0.75rem; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.375rem; }
+
+        /* Toolbar */
+        .ap-toolbar { display:flex; align-items:center; gap:0.75rem; margin-bottom:1.25rem; flex-wrap:wrap; }
+        .ap-toolbar-right { margin-left:auto; display:flex; gap:0.5rem; align-items:center; }
+
+        /* Score bar inline */
+        .inline-bar { display:flex; align-items:center; gap:0.5rem; }
+        .inline-bar-track { width:80px; height:6px; background:#1e293b; border-radius:9999px; overflow:hidden; }
+        .inline-bar-fill { height:100%; border-radius:9999px; }
+        .inline-bar-fill.good { background:#22c55e; }
+        .inline-bar-fill.mid { background:#f59e0b; }
+        .inline-bar-fill.bad { background:#ef4444; }
+
+        /* Quiz editor card */
+        /* ── Quiz Editor ── */
+        .qe-card { background:#111827; border:1px solid #1f2d3d; border-radius:1rem; padding:1.75rem; margin-bottom:1.25rem; }
+        .qe-card label { display:block; font-size:0.7rem; font-weight:700; color:#4f6380; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.4rem; }
+        .qe-field { width:100%; padding:0.75rem 1rem; background:#0b1120; border:1.5px solid #1f2d3d; border-radius:0.75rem; color:#e2e8f0; font-size:0.925rem; margin-bottom:1.25rem; font-family:inherit; outline:none; transition:border-color 0.2s,box-shadow 0.2s; }
+        .qe-field:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+        .qe-field::placeholder { color:#334155; }
+        .qe-field:last-child { margin-bottom:0; }
+        .qe-meta-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+        @media(max-width:700px){ .qe-meta-grid { grid-template-columns:1fr; } }
+
+        /* ── Question Items ── */
+        .q-item { background:#111827; border:1.5px solid #1f2d3d; border-radius:1rem; padding:0; margin-bottom:0.875rem; overflow:hidden; transition:border-color 0.2s,transform 0.15s; }
+        .q-item:hover { border-color:#334155; transform:translateY(-1px); }
+        .q-item-header { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.25rem; background:#0d1927; border-bottom:1px solid #1f2d3d; }
+        .q-item-num { display:flex; align-items:center; gap:0.625rem; }
+        .q-num-badge { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#4f46e5); display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:800; color:white; flex-shrink:0; }
+        .q-num-label { font-size:0.75rem; font-weight:700; color:#6366f1; text-transform:uppercase; letter-spacing:0.08em; }
+        .q-item-actions { display:flex; gap:0.25rem; }
+        .q-item-body { padding:1rem 1.25rem; }
+        .q-text { color:#e2e8f0; font-size:0.975rem; font-weight:500; line-height:1.5; margin-bottom:0.875rem; }
+        .q-answers-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; }
+        @media(max-width:600px){ .q-answers-grid { grid-template-columns:1fr; } }
+        .q-answer-chip { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.875rem; border-radius:0.625rem; font-size:0.8rem; font-weight:500; }
+        .q-answer-chip.correct { background:rgba(34,197,94,0.1); color:#4ade80; border:1px solid rgba(34,197,94,0.25); }
+        .q-answer-chip.wrong { background:#0b1120; color:#475569; border:1px solid #1f2d3d; }
+        .q-answer-chip .chip-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+        .q-answer-chip.correct .chip-dot { background:#4ade80; }
+        .q-answer-chip.wrong .chip-dot { background:#334155; }
+        .q-empty { text-align:center; padding:3rem 2rem; border:2px dashed #1f2d3d; border-radius:1rem; color:#334155; }
+        .q-empty-icon { font-size:2.5rem; margin-bottom:0.75rem; }
+        .q-empty-text { font-size:0.925rem; font-weight:600; color:#475569; margin-bottom:0.375rem; }
+        .q-empty-sub { font-size:0.8rem; color:#334155; }
+
+        /* ── Question Modal (admin-themed) ── */
+        .qmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:1rem; z-index:1000; }
+        .qmodal { background:#111827; border:1px solid #1f2d3d; border-radius:1.125rem; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; box-shadow:0 30px 80px rgba(0,0,0,0.6); }
+        .qmodal-header { display:flex; justify-content:space-between; align-items:center; padding:1.25rem 1.5rem; border-bottom:1px solid #1f2d3d; background:#0d1927; border-radius:1.125rem 1.125rem 0 0; }
+        .qmodal-title { font-size:1.1rem; font-weight:700; color:white; display:flex; align-items:center; gap:0.625rem; }
+        .qmodal-body { padding:1.5rem; }
+        .qmodal-section-label { font-size:0.7rem; font-weight:700; color:#4f6380; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.625rem; display:flex; justify-content:space-between; align-items:center; }
+        .qmodal-textarea { width:100%; padding:0.875rem 1rem; background:#0b1120; border:1.5px solid #1f2d3d; border-radius:0.75rem; color:#e2e8f0; font-size:0.975rem; font-family:inherit; outline:none; resize:vertical; min-height:90px; transition:border-color 0.2s,box-shadow 0.2s; margin-bottom:1.25rem; }
+        .qmodal-textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+        .qmodal-textarea::placeholder { color:#334155; }
+        .qmodal-answer-row { display:flex; align-items:center; gap:0.625rem; margin-bottom:0.625rem; }
+        .qmodal-correct-btn { width:36px; height:36px; border-radius:50%; border:2px solid #334155; background:#0b1120; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.8rem; flex-shrink:0; transition:all 0.2s; }
+        .qmodal-correct-btn.active { border-color:#22c55e; background:rgba(34,197,94,0.15); color:#4ade80; }
+        .qmodal-correct-btn:not(.active) { color:#334155; }
+        .qmodal-correct-btn:not(.active):hover { border-color:#475569; color:#64748b; }
+        .qmodal-answer-input { flex:1; padding:0.625rem 0.875rem; background:#0b1120; border:1.5px solid #1f2d3d; border-radius:0.75rem; color:#e2e8f0; font-size:0.875rem; font-family:inherit; outline:none; transition:border-color 0.2s; }
+        .qmodal-answer-input:focus { border-color:#6366f1; }
+        .qmodal-answer-input::placeholder { color:#334155; }
+        .qmodal-delete-btn { width:32px; height:32px; border-radius:0.5rem; border:none; background:none; cursor:pointer; color:#334155; display:flex; align-items:center; justify-content:center; transition:all 0.2s; flex-shrink:0; font-size:1rem; }
+        .qmodal-delete-btn:hover:not(:disabled) { background:rgba(239,68,68,0.1); color:#f87171; }
+        .qmodal-delete-btn:disabled { opacity:0.3; cursor:not-allowed; }
+        .qmodal-hint { font-size:0.75rem; color:#334155; margin-top:0.375rem; margin-bottom:1.25rem; display:flex; align-items:center; gap:0.375rem; }
+        .qmodal-footer { display:flex; gap:0.75rem; padding:1.25rem 1.5rem; border-top:1px solid #1f2d3d; background:#0d1927; border-radius:0 0 1.125rem 1.125rem; }
+        .qmodal-footer button { flex:1; padding:0.75rem; border-radius:0.75rem; font-weight:700; font-size:0.925rem; cursor:pointer; border:none; transition:all 0.2s; }
+        .qmodal-btn-cancel { background:#1e293b; color:#94a3b8; border:1px solid #334155 !important; }
+        .qmodal-btn-cancel:hover { background:#334155; color:white; }
+        .qmodal-btn-save { background:linear-gradient(135deg,#6366f1,#4f46e5); color:white; box-shadow:0 4px 15px rgba(99,102,241,0.3); }
+        .qmodal-btn-save:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(99,102,241,0.4); }
+
+        /* AI Tools */
+        .ai-chat { background:#0b1120; border:1px solid #1f2d3d; border-radius:0.75rem; overflow:hidden; }
+        .ai-chat-messages { height:350px; overflow-y:auto; padding:1.25rem; display:flex; flex-direction:column; gap:0.875rem; }
+        .ai-msg { max-width:85%; }
+        .ai-msg.user { margin-left:auto; }
+        .ai-msg-bubble { padding:0.75rem 1rem; border-radius:0.875rem; font-size:0.875rem; line-height:1.6; white-space:pre-wrap; }
+        .ai-msg.user .ai-msg-bubble { background:linear-gradient(135deg,#6366f1,#4f46e5); color:white; border-radius:0.875rem 0.875rem 0.125rem 0.875rem; }
+        .ai-msg.assistant .ai-msg-bubble { background:#1e293b; color:#e2e8f0; border-radius:0.875rem 0.875rem 0.875rem 0.125rem; border:1px solid #334155; }
+        .ai-chat-input { display:flex; gap:0.5rem; padding:1rem; border-top:1px solid #1f2d3d; background:#111827; }
+        .ai-chat-input input { flex:1; background:#1e293b; border:1px solid #334155; border-radius:0.625rem; color:white; padding:0.625rem 0.875rem; font-size:0.875rem; outline:none; }
+        .ai-chat-input input:focus { border-color:#6366f1; }
+        .ai-quick-btns { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.25rem; }
+        .ai-quick-btn { padding:0.4rem 0.875rem; background:#1e293b; border:1px solid #334155; border-radius:9999px; color:#94a3b8; font-size:0.8rem; cursor:pointer; transition:all 0.2s; }
+        .ai-quick-btn:hover { border-color:#6366f1; color:#a5b4fc; background:rgba(99,102,241,0.1); }
+
+        /* Moderation */
+        .mod-flag { display:flex; align-items:center; gap:0.875rem; padding:0.875rem; background:#111827; border:1px solid #1f2d3d; border-radius:0.75rem; margin-bottom:0.625rem; }
+        .mod-flag-icon { font-size:1.5rem; flex-shrink:0; }
+        .mod-flag-content { flex:1; }
+        .mod-flag-title { color:white; font-weight:600; font-size:0.875rem; }
+        .mod-flag-desc { color:#64748b; font-size:0.75rem; margin-top:0.125rem; }
+        .mod-flag-actions { display:flex; gap:0.5rem; }
+
+        /* Settings */
+        .settings-section { margin-bottom:2rem; }
+        .settings-section-title { font-size:1rem; font-weight:700; color:white; margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:1px solid #1f2d3d; }
+        .settings-row { display:flex; justify-content:space-between; align-items:center; padding:0.875rem 0; border-bottom:1px solid #1a2332; }
+        .settings-row:last-child { border-bottom:none; }
+        .settings-row-info h4 { color:#e2e8f0; font-size:0.875rem; font-weight:600; }
+        .settings-row-info p { color:#475569; font-size:0.75rem; margin-top:0.125rem; }
+        .ap-toggle { position:relative; width:44px; height:24px; cursor:pointer; }
+        .ap-toggle input { opacity:0; width:0; height:0; }
+        .ap-toggle-slider { position:absolute; inset:0; background:#334155; border-radius:9999px; transition:0.3s; }
+        .ap-toggle-slider::before { content:''; position:absolute; width:18px; height:18px; left:3px; bottom:3px; background:white; border-radius:50%; transition:0.3s; }
+        .ap-toggle input:checked + .ap-toggle-slider { background:#6366f1; }
+        .ap-toggle input:checked + .ap-toggle-slider::before { transform:translateX(20px); }
+
+        /* Analytics heatmap */
+        .heatmap-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:0.5rem; }
+        .heatmap-cell { padding:0.75rem; border-radius:0.5rem; text-align:center; }
+        .heatmap-cell .hm-label { font-size:0.7rem; color:#94a3b8; margin-bottom:0.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .heatmap-cell .hm-val { font-size:1.25rem; font-weight:800; }
+        .hm-high { background:rgba(34,197,94,0.15); } .hm-high .hm-val { color:#4ade80; }
+        .hm-mid  { background:rgba(245,158,11,0.15); } .hm-mid  .hm-val { color:#fbbf24; }
+        .hm-low  { background:rgba(239,68,68,0.15);  } .hm-low  .hm-val { color:#f87171; }
+
+        /* Responsive */
+        @media(max-width:768px){
+            .ap-sidebar { display:none; }
+            .ap-topbar-search { display:none; }
+            .ap-charts-grid { grid-template-columns:1fr; }
+            .ap-stats-grid { grid-template-columns:1fr 1fr; }
+        }
+
+        /* Edit quiz full-page */
+        #ap-quiz-editor { display:none; }
+        #ap-quiz-editor.active { display:block; }
+
+        /* Results table */
+        .results-empty { background:#111827;border-radius:1rem;padding:3rem;text-align:center;border:1px solid #1f2d3d; }
+        .results-empty p { color:#64748b;font-size:1.125rem; }
+        .results-table-container { background:#111827;border-radius:1rem;border:1px solid #1f2d3d;overflow:hidden; }
+        .results-table { width:100%;border-collapse:collapse; }
+        .results-table thead { background:#0f1929; }
+        .results-table th { padding:1rem 1.5rem;text-align:left;font-size:0.875rem;font-weight:600;color:#475569;text-transform:uppercase; }
+        .results-table tbody tr { border-top:1px solid #1a2332; }
+        .results-table tbody tr:hover { background:rgba(255,255,255,0.03); }
+        .results-table td { padding:1rem 1.5rem; }
+        .results-table td.name { color:white;font-weight:500; }
+        .results-table td.regular { color:#cbd5e1; }
+        .results-table td.meta { color:#64748b;font-size:0.875rem; }
+        .score-display { display:flex;align-items:center;gap:0.75rem; }
+        .score-value.good { color:#4ade80;font-weight:700; }
+        .score-value.partial { color:#fb923c;font-weight:700; }
+        .score-percent { color:#475569;font-size:0.875rem; }
+        .icon { display:inline-block;width:1.25rem;height:1.25rem;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+        .icon-lg { width:1.5rem;height:1.5rem; }
+
+        /* Results table */
+        .results-empty { background:#1e293b;border-radius:1rem;padding:3rem;text-align:center;border:1px solid #334155; }
+        .results-empty p { color:#64748b;font-size:1.125rem; }
+        .results-table-container { background:#1e293b;border-radius:1rem;border:1px solid #334155;overflow:hidden; }
+        .results-table { width:100%;border-collapse:collapse; }
+        .results-table thead { background:#334155; }
+        .results-table th { padding:1rem 1.5rem;text-align:left;font-size:0.875rem;font-weight:600;color:#cbd5e1;text-transform:uppercase; }
+        .results-table tbody tr { border-top:1px solid #334155; }
+        .results-table tbody tr:hover { background:rgba(51,65,85,0.5); }
+        .results-table td { padding:1rem 1.5rem; }
+        .results-table td.name { color:white;font-weight:500; }
+        .results-table td.regular { color:#cbd5e1; }
+        .results-table td.meta { color:#94a3b8;font-size:0.875rem; }
+        .score-display { display:flex;align-items:center;gap:0.75rem; }
+        .score-value.good { color:#4ade80;font-weight:700; }
+        .score-value.partial { color:#fb923c;font-weight:700; }
+        .score-percent { color:#64748b;font-size:0.875rem; }
+        .icon { display:inline-block;width:1.25rem;height:1.25rem;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+        .icon-lg { width:1.5rem;height:1.5rem; }
+        @media(max-width:768px){.main-title h1{font-size:3rem;}.quiz-header h1{font-size:2.5rem;}.question-card{padding:1.5rem;}.question-text{font-size:1.5rem;}}
+    </style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <p>Connexion a Firebase...</p>
+</div>
+
+<!-- ANNOUNCEMENT BANNER -->
+<div id="announcement-banner" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:9000;padding:0.875rem 1.5rem;display:flex;align-items:center;justify-content:center;gap:1rem;font-weight:600;font-size:0.9rem;">
+    <span id="announcement-icon">📢</span>
+    <span id="announcement-text"></span>
+    <button onclick="document.getElementById('announcement-banner').classList.add('hidden')" style="background:rgba(255,255,255,0.25);border:none;color:inherit;padding:0.2rem 0.6rem;border-radius:9999px;cursor:pointer;font-size:0.8rem;">✕</button>
+</div>
+
+<!-- USER FORM -->
+<div id="user-form-view" class="hidden">
+    <div class="form-container" style="margin-top:0;">
+        <div class="main-title animate-fade-in">
+            <h1>QuizMaster</h1>
+            <p id="lang-subtitle">Testez vos connaissances</p>
+        </div>
+        <div class="form-card animate-slide-up">
+            <!-- Google login placeholder -->
+            <button id="btn-google-login" onclick="googleLogin()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:0.875rem;border:2px solid #e2e8f0;border-radius:1rem;background:white;cursor:pointer;font-size:1rem;font-weight:600;color:#334155;margin-bottom:1.5rem;transition:all 0.3s;">
+                <!-- Google icon SVG -->
+                <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                Continuer avec Google
+            </button>
+            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+                <div style="flex:1;height:1px;background:#e2e8f0;"></div>
+                <span style="color:#94a3b8;font-size:0.875rem;">ou</span>
+                <div style="flex:1;height:1px;background:#e2e8f0;"></div>
+            </div>
+            <form id="user-form">
+                <div class="form-group"><label class="form-label" data-lang-key="firstName">Prénom</label><input type="text" id="firstName" class="form-input" required data-lang-placeholder="firstName"></div>
+                <div class="form-group"><label class="form-label" data-lang-key="lastName">Nom de famille</label><input type="text" id="lastName" class="form-input" required></div>
+                <div class="form-group"><label class="form-label" data-lang-key="reason">Raison de passer le quiz</label><textarea id="reason" class="form-textarea" rows="3" required></textarea></div>
+                <button type="submit" class="btn-primary" id="lang-continuer">Continuer</button>
+            </form>
+            <button class="btn-admin-link" onclick="showAdminLogin()">
+                <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <span id="lang-adminAccess">Accès administrateur</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ADMIN LOGIN -->
+<div id="admin-login-view" class="hidden">
+    <div class="admin-login-container">
+        <div class="admin-header">
+            <svg class="admin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <h2>Connexion Admin</h2>
+            <p>Acc&egrave;s r&eacute;serv&eacute; aux administrateurs</p>
+        </div>
+        <div class="admin-card">
+            <form id="admin-login-form">
+                <div class="form-group"><label class="form-label" style="color:#a5b4fc;">Nom d'utilisateur</label><input type="text" id="admin-username" class="admin-input" required></div>
+                <div class="form-group"><label class="form-label" style="color:#a5b4fc;">Mot de passe</label><input type="password" id="admin-password" class="admin-input" required></div>
+                <button type="submit" class="btn-admin-login">Se connecter</button>
+                <button type="button" class="btn-back" onclick="showUserForm()">&larr; Retour</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- QUIZ LIST -->
+<div id="quiz-list-view" class="hidden">
+    <div class="quiz-list-container">
+        <div class="quiz-header"><h1 id="lang-chooseQuiz">Choisissez un quiz</h1><p id="user-greeting"></p></div>
+        <div class="quiz-grid" id="quiz-grid"></div>
+        <div style="display:flex;gap:1rem;margin-top:2rem;justify-content:center;">
+            <button id="lang-revisions-btn" style="padding:1rem 2rem;background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;border:none;border-radius:0.75rem;font-size:1.125rem;font-weight:600;cursor:pointer;" onclick="showRevisions()">📚 Révisions avec IA</button>
+        </div>
+        <div id="user-history-section" style="max-width:480px;margin:2rem auto 0;">
+            <div style="background:white;border-radius:1.25rem;padding:1.5rem;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                    <span style="font-weight:700;color:#1e293b;">📋 Mes quiz récents</span>
+                    <button onclick="localStorage.removeItem('qm_history');renderUserHistory();" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:0.75rem;">Effacer</button>
+                </div>
+                <div id="user-history-list"></div>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:1.5rem;"><button style="color:#64748b;background:none;border:none;cursor:pointer;padding:0.5rem;" onclick="showUserForm()">&#8592; Retour</button></div>
+    </div>
+</div>
+
+<!-- QUIZ -->
+<div id="quiz-view" class="hidden">
+    <div class="quiz-container">
+        <div class="quiz-progress">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                <div class="progress-text" id="progress-text"></div>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                  <span id="quiz-timer" style="background:rgba(255,255,255,0.15);padding:0.25rem 0.625rem;border-radius:9999px;font-size:0.75rem;color:white;font-weight:600;">0s</span>
+                  <button onclick="quitQuiz()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;padding:0.3rem 0.75rem;border-radius:9999px;font-size:0.75rem;cursor:pointer;" title="Quitter le quiz">✖ Quitter</button>
+                </div>
+            </div>
+            <div class="progress-bar-bg"><div class="progress-bar" id="progress-bar"></div></div>
+        </div>
+        <div class="question-card">
+            <h2 class="question-text" id="question-text"></h2>
+            <div class="answers-list" id="answers-list"></div>
+            <div style="display:flex;gap:0.75rem;">
+                <button id="prev-btn" onclick="prevQuestion()" style="display:none;flex:1;background:#f1f5f9;color:#334155;padding:1.25rem;border-radius:1rem;font-weight:600;font-size:1rem;border:none;cursor:pointer;" id="lang-prev-btn">← Précédent</button>
+                <button class="btn-next" id="next-btn" onclick="nextQuestion()" style="flex:2;">Question suivante →</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RESULT -->
+<div id="result-view" class="hidden">
+    <div class="result-container">
+        <div class="result-card">
+            <div id="result-icon" class="result-icon"></div>
+            <h2 class="result-title" id="result-title">R&eacute;sultat</h2>
+            <div class="percentage-circle">
+                <svg width="200" height="200" viewBox="0 0 200 200">
+                    <circle class="percentage-circle-bg" cx="100" cy="100" r="90"></circle>
+                    <circle id="percentage-circle-progress" class="percentage-circle-progress" cx="100" cy="100" r="90"></circle>
+                </svg>
+                <div class="percentage-text" id="percentage-text">0%</div>
+            </div>
+            <div class="result-details">
+                <div class="result-stat"><div class="result-stat-value" id="correct-answers">0</div><div class="result-stat-label" data-lang-key="correct">Correctes</div></div>
+                <div class="result-stat"><div class="result-stat-value" id="wrong-answers">0</div><div class="result-stat-label" data-lang-key="wrong">Incorrectes</div></div>
+                <div class="result-stat"><div class="result-stat-value" id="total-questions">0</div><div class="result-stat-label" data-lang-key="total">Total</div></div>
+            </div>
+            <p class="result-percentage" id="result-percentage"></p>
+            <div class="result-buttons">
+                <button class="btn-primary" onclick="showAnswerReview()" id="lang-seeAnswers">🔍 Voir mes réponses</button>
+                <button class="btn-secondary" onclick="showQuizList()" id="lang-backToQuizzes">Retour aux quiz</button>
+                <button style="background:none;border:none;color:#64748b;cursor:pointer;padding:0.5rem;font-size:0.875rem;" onclick="resetQuiz()">Recommencer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ANSWER REVIEW -->
+<div id="answer-review-view" class="hidden">
+    <div style="min-height:100vh;background:linear-gradient(135deg,#f8fafc 0%,#e0f2fe 50%,#e0e7ff 100%);padding:2rem;">
+        <div style="max-width:52rem;margin:0 auto;">
+            <div style="text-align:center;margin-bottom:2rem;">
+                <h1 style="font-size:2.5rem;font-weight:700;background:linear-gradient(to right,#4f46e5,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">🔍 Révision de vos réponses</h1>
+                <p style="color:#475569;margin-top:0.5rem;" id="review-subtitle"></p>
+            </div>
+            <div id="review-questions-list"></div>
+            <div style="display:flex;gap:1rem;justify-content:center;margin-top:2rem;flex-wrap:wrap;">
+                <button class="btn-primary" style="max-width:240px;" onclick="showQuizList()">Retour aux quiz</button>
+                <button class="btn-secondary" style="max-width:240px;" onclick="resetQuiz()">Recommencer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- REVISIONS -->
+<div id="revisions-view" class="hidden">
+    <div style="max-width:800px;margin:0 auto;padding:2rem;">
+        <div style="text-align:center;margin-bottom:2rem;">
+            <h1 style="background:linear-gradient(135deg,#8b5cf6,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-size:2.5rem;margin-bottom:0.5rem;">&#128218; R&eacute;visions avec IA</h1>
+            <p style="color:#64748b;">Propuls&eacute; par Groq &#128640;</p>
+        </div>
+        <div style="background:white;border-radius:1rem;padding:2rem;box-shadow:0 10px 30px rgba(0,0,0,0.1);margin-bottom:2rem;">
+            <label style="display:block;font-weight:600;color:#1e293b;margin-bottom:0.75rem;text-align:center;">Choisissez un sujet :</label>
+            <select id="revision-topic" style="width:100%;padding:1rem;border:2px solid #e2e8f0;border-radius:0.75rem;font-size:1rem;background:white;cursor:pointer;" onchange="updateTopicDescription()">
+                <option value="">-- S&eacute;lectionnez un sujet --</option>
+                <option value="mathematiques">&#128208; Math&eacute;matiques</option>
+                <option value="francais">&#128221; Fran&ccedil;ais</option>
+                <option value="histoire">&#127963; Histoire</option>
+                <option value="geographie">&#127757; G&eacute;ographie</option>
+                <option value="sciences">&#128300; Sciences</option>
+                <option value="anglais">&#127468;&#127463; Anglais</option>
+                <option value="programmation">&#128187; Programmation</option>
+                <option value="custom">&#10024; Autre</option>
+            </select>
+            <div id="custom-topic-container" style="display:none;margin-top:1rem;"><input type="text" id="custom-topic-input" placeholder="Entrez votre sujet..." style="width:100%;padding:1rem;border:2px solid #e2e8f0;border-radius:0.75rem;font-size:1rem;"></div>
+            <div id="topic-description" style="display:none;margin-top:1rem;padding:1rem;background:#f8fafc;border-radius:0.5rem;color:#475569;font-size:0.875rem;text-align:center;"></div>
+            <button onclick="startRevision()" style="width:100%;margin-top:1.5rem;padding:1.25rem;background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;border:none;border-radius:0.75rem;font-size:1.125rem;font-weight:600;cursor:pointer;">&#128640; Commencer</button>
+        </div>
+        <div id="revision-chat-container" style="display:none;">
+            <div style="background:white;border-radius:1rem;padding:1.5rem;box-shadow:0 10px 30px rgba(0,0,0,0.1);margin-bottom:1.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #f1f5f9;">
+                    <div><h3 style="color:#1e293b;font-weight:700;margin:0;">Session de r&eacute;vision</h3><p id="current-revision-topic" style="color:#64748b;font-size:0.875rem;margin:0;"></p></div>
+                    <button onclick="endRevision()" style="padding:0.5rem 1rem;background:#ef4444;color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:600;">Terminer</button>
+                </div>
+                <div id="revision-messages" style="max-height:450px;overflow-y:auto;margin-bottom:1.5rem;padding:1rem;background:#f8fafc;border-radius:0.75rem;min-height:200px;"></div>
+                <div style="display:flex;gap:0.75rem;">
+                    <input type="text" id="revision-input" placeholder="Posez votre question..." style="flex:1;padding:1rem;border:2px solid #e2e8f0;border-radius:0.75rem;font-size:1rem;" onkeypress="if(event.key==='Enter')sendRevisionMessage()">
+                    <button onclick="sendRevisionMessage()" style="padding:1rem 1.5rem;background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;border:none;border-radius:0.75rem;font-weight:600;cursor:pointer;">Envoyer</button>
+                </div>
+            </div>
+        </div>
+        <div style="text-align:center;"><button onclick="backToQuizList()" style="color:#64748b;background:none;border:none;cursor:pointer;padding:0.5rem;">&larr; Retour aux quiz</button></div>
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     ADMIN PANEL — GOD TIER
+═══════════════════════════════════════════════════ -->
+<div id="admin-view" class="hidden">
+
+  <!-- TOP BAR -->
+  <div class="ap-topbar">
+    <div class="ap-topbar-left">
+      <span class="ap-logo">⚡ QuizMaster Admin</span>
+      <div class="ap-topbar-search">
+        <span style="color:#475569;font-size:0.9rem;">🔍</span>
+        <input type="text" placeholder="Rechercher...">
+      </div>
+    </div>
+    <div class="ap-topbar-right">
+      <div style="position:relative;">
+      <button class="ap-topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notif-bell">🔔</button>
+      <span id="notif-badge" class="ap-badge hidden" style="position:absolute;top:-4px;right:-4px;min-width:18px;text-align:center;">0</span>
+      <div id="notif-panel" class="hidden" style="position:absolute;top:calc(100% + 8px);right:0;width:340px;background:#111827;border:1px solid #1f2d3d;border-radius:0.875rem;box-shadow:0 20px 60px rgba(0,0,0,0.5);z-index:1000;overflow:hidden;">
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid #1f2d3d;display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:white;font-weight:700;">🔔 Notifications</span>
+          <button onclick="clearNotifications()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.75rem;">Tout effacer</button>
+        </div>
+        <div id="notif-list" style="max-height:320px;overflow-y:auto;"></div>
+      </div>
+    </div>
+      <div class="ap-avatar" title="Admin">A</div>
+      <button class="ap-topbar-btn" onclick="logout()" title="Déconnexion" style="color:#f87171;">⏻</button>
+    </div>
+  </div>
+
+  <!-- SHELL -->
+  <div class="ap-shell">
+
+    <!-- SIDEBAR -->
+    <nav class="ap-sidebar" id="ap-sidebar">
+      <div class="ap-sidebar-section">
+        <div class="ap-sidebar-label">Navigation</div>
+        <button class="ap-nav-item active" id="nav-dashboard"   onclick="apNav('dashboard')">  <span class="ap-nav-icon">📊</span><span class="ap-nav-text">Dashboard</span></button>
+        <button class="ap-nav-item"        id="nav-quizmanager" onclick="apNav('quizmanager')"><span class="ap-nav-icon">🧠</span><span class="ap-nav-text">Quiz Manager</span></button>
+        <button class="ap-nav-item"        id="nav-questionbank" onclick="apNav('questionbank')"><span class="ap-nav-icon">❓</span><span class="ap-nav-text">Question Bank</span></button>
+        <button class="ap-nav-item"        id="nav-users"       onclick="apNav('users')">       <span class="ap-nav-icon">👥</span><span class="ap-nav-text">Utilisateurs</span></button>
+        <button class="ap-nav-item"        id="nav-results"     onclick="apNav('results')">     <span class="ap-nav-icon">🏆</span><span class="ap-nav-text">Résultats</span></button>
+        <button class="ap-nav-item"        id="nav-analytics"   onclick="apNav('analytics')">   <span class="ap-nav-icon">📈</span><span class="ap-nav-text">Analytics</span></button>
+        <button class="ap-nav-item"        id="nav-aitools"     onclick="apNav('aitools')">     <span class="ap-nav-icon">🤖</span><span class="ap-nav-text">AI Tools</span></button>
+        <button class="ap-nav-item"        id="nav-moderation"  onclick="apNav('moderation')">  <span class="ap-nav-icon">🛡️</span><span class="ap-nav-text">Modération</span></button>
+        <button class="ap-nav-item"        id="nav-announcements" onclick="apNav('announcements')"><span class="ap-nav-icon">📢</span><span class="ap-nav-text">Annonces</span></button>
+        <button class="ap-nav-item"        id="nav-settings"    onclick="apNav('settings')">    <span class="ap-nav-icon">⚙️</span><span class="ap-nav-text">Paramètres</span></button>
+      </div>
+      <div class="ap-sidebar-bottom">
+        <button class="ap-nav-item" onclick="logout()"><span class="ap-nav-icon">🚪</span><span class="ap-nav-text">Déconnexion</span></button>
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="ap-main">
+
+      <!-- ── 1. DASHBOARD ── -->
+      <div class="ap-section active" id="ap-dashboard">
+        <div class="ap-section-title">📊 Dashboard</div>
+        <div class="ap-section-subtitle">Vue d'ensemble en temps réel</div>
+
+        <div class="ap-stats-grid" id="dash-stats">
+          <div class="ap-stat-card indigo"><div class="ap-stat-icon">🧠</div><div class="ap-stat-label">Quiz</div><div class="ap-stat-value" id="ds-quizzes">—</div><div class="ap-stat-sub">total publiés</div></div>
+          <div class="ap-stat-card cyan"><div class="ap-stat-icon">❓</div><div class="ap-stat-label">Questions</div><div class="ap-stat-value" id="ds-questions">—</div><div class="ap-stat-sub">dans la banque</div></div>
+          <div class="ap-stat-card green"><div class="ap-stat-icon">🏆</div><div class="ap-stat-label">Tentatives</div><div class="ap-stat-value" id="ds-attempts">—</div><div class="ap-stat-sub">au total</div></div>
+          <div class="ap-stat-card amber"><div class="ap-stat-icon">📈</div><div class="ap-stat-label">Score moyen</div><div class="ap-stat-value" id="ds-avgscore">—</div><div class="ap-stat-sub">tous quiz</div></div>
+          <div class="ap-stat-card rose"><div class="ap-stat-icon">👥</div><div class="ap-stat-label">Participants</div><div class="ap-stat-value" id="ds-users">—</div><div class="ap-stat-sub">uniques</div></div>
+          <div class="ap-stat-card purple"><div class="ap-stat-icon">🤖</div><div class="ap-stat-label">Aides IA</div><div class="ap-stat-value" id="ds-aihelps">—</div><div class="ap-stat-sub">utilisations</div></div>
+        </div>
+
+        <div class="ap-charts-grid">
+          <div class="ap-card">
+            <div class="ap-card-header"><div><div class="ap-card-title">📊 Tentatives par quiz</div><div class="ap-card-subtitle">Popularité relative</div></div></div>
+            <div class="ap-bar-chart" id="chart-attempts"></div>
+          </div>
+          <div class="ap-card">
+            <div class="ap-card-header"><div><div class="ap-card-title">🎯 Score moyen par quiz</div><div class="ap-card-subtitle">Performance globale</div></div></div>
+            <div class="ap-bar-chart" id="chart-scores"></div>
+          </div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-header"><div class="ap-card-title">⚡ Activité récente</div></div>
+          <div id="dash-activity"></div>
+        </div>
+      </div>
+
+      <!-- ── 2. QUIZ MANAGER ── -->
+      <div class="ap-section" id="ap-quizmanager">
+        <!-- List view -->
+        <div id="qm-list-view">
+          <div class="ap-section-title">🧠 Quiz Manager</div>
+          <div class="ap-section-subtitle">Gérez, publiez et organisez vos quiz</div>
+          <div class="ap-toolbar">
+            <input type="text" class="ap-input" id="qm-search" placeholder="🔍 Rechercher un quiz..." style="width:240px;" oninput="filterAdminQuizzes()">
+            <select class="ap-select" id="qm-filter-status" onchange="filterAdminQuizzes()">
+              <option value="">Tous les statuts</option>
+              <option value="published">Publié</option>
+              <option value="draft">Brouillon</option>
+            </select>
+            <div class="ap-toolbar-right">
+              <button class="ap-btn ap-btn-secondary" onclick="importQuizJSON()">📥 Importer JSON</button>
+              <button class="ap-btn ap-btn-primary" onclick="createNewQuiz()">+ Nouveau Quiz</button>
+            </div>
+          </div>
+          <div class="ap-table-wrap">
+            <table class="ap-table">
+              <thead><tr><th>Titre</th><th>Questions</th><th>Difficulté</th><th>Statut</th><th>Tentatives</th><th>Actions</th></tr></thead>
+              <tbody id="qm-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Editor view -->
+        <div id="ap-quiz-editor">
+
+          <!-- Sticky top bar -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.75rem;padding:1.25rem 1.5rem;background:#111827;border:1px solid #1f2d3d;border-radius:1rem;flex-wrap:wrap;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;">
+              <button class="ap-btn ap-btn-secondary" onclick="cancelEditQuiz()" style="padding:0.5rem 0.875rem;">← Retour</button>
+              <div>
+                <div style="color:white;font-size:1.25rem;font-weight:800;" id="qe-page-title">Nouveau Quiz</div>
+                <div style="color:#475569;font-size:0.8rem;margin-top:0.125rem;">Remplissez les informations et ajoutez vos questions</div>
+              </div>
+            </div>
+            <button class="ap-btn ap-btn-primary" id="btn-save-quiz" onclick="saveQuiz()" style="padding:0.75rem 1.5rem;font-size:0.925rem;">💾 Sauvegarder sur Firebase</button>
+          </div>
+
+          <!-- Quiz info card -->
+          <div class="qe-card">
+            <div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:1.25rem;">
+              <div style="width:4px;height:20px;background:linear-gradient(to bottom,#6366f1,#06b6d4);border-radius:9999px;"></div>
+              <span style="color:white;font-weight:700;font-size:0.975rem;">Informations générales</span>
+            </div>
+            <label>Titre du quiz *</label>
+            <input type="text" class="qe-field" id="edit-quiz-title" placeholder="Ex: Physique Quantique — Niveau 2">
+            <label>Description</label>
+            <textarea class="qe-field" id="edit-quiz-description" rows="2" placeholder="Décrivez brièvement le contenu de ce quiz..."></textarea>
+            <div class="qe-meta-grid">
+              <div>
+                <label>Difficulté</label>
+                <select class="qe-field" id="edit-quiz-difficulty">
+                  <option value="easy">🟢 Facile</option>
+                  <option value="medium">🟡 Moyen</option>
+                  <option value="hard">🔴 Difficile</option>
+                </select>
+              </div>
+              <div>
+                <label>Catégorie</label>
+                <input type="text" class="qe-field" id="edit-quiz-category" placeholder="Sciences, Histoire...">
+              </div>
+              <div>
+                <label>Statut</label>
+                <select class="qe-field" id="edit-quiz-status">
+                  <option value="published">✅ Publié</option>
+                  <option value="draft">📝 Brouillon</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Questions section header -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;padding:0 0.25rem;">
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+              <div style="width:4px;height:20px;background:linear-gradient(to bottom,#6366f1,#06b6d4);border-radius:9999px;"></div>
+              <span style="color:white;font-weight:700;font-size:0.975rem;">Questions</span>
+              <span style="background:#1e293b;color:#6366f1;border:1px solid rgba(99,102,241,0.3);padding:0.2rem 0.625rem;border-radius:9999px;font-size:0.75rem;font-weight:700;" id="q-count-badge">0</span>
+            </div>
+            <button class="ap-btn ap-btn-primary" onclick="addQuestion()" style="gap:0.5rem;">
+              <span style="font-size:1.1rem;line-height:1;">+</span> Nouvelle question
+            </button>
+          </div>
+          <div id="questions-list"></div>
+
+          <!-- Bottom save -->
+          <div style="text-align:center;padding:1.5rem 0 0.5rem;">
+            <button class="ap-btn ap-btn-primary" onclick="saveQuiz()" style="padding:0.875rem 3rem;font-size:1rem;">💾 Sauvegarder sur Firebase</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 3. QUESTION BANK ── -->
+      <div class="ap-section" id="ap-questionbank">
+        <div class="ap-section-title">❓ Banque de Questions</div>
+        <div class="ap-section-subtitle">Toutes les questions de tous vos quiz en un endroit</div>
+        <div class="ap-toolbar">
+          <input type="text" class="ap-input" id="qb-search" placeholder="🔍 Rechercher une question..." style="width:280px;" oninput="filterQuestionBank()">
+          <select class="ap-select" id="qb-filter-quiz" onchange="filterQuestionBank()">
+            <option value="">Tous les quiz</option>
+          </select>
+          <div class="ap-toolbar-right" style="font-size:0.8rem;color:#475569;" id="qb-count"></div>
+        </div>
+        <div class="ap-table-wrap">
+          <table class="ap-table">
+            <thead><tr><th>Question</th><th>Quiz</th><th>Réponses</th><th>Correcte</th></tr></thead>
+            <tbody id="qb-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── 4. USERS ── -->
+      <div class="ap-section" id="ap-users">
+        <div class="ap-section-title">👥 Utilisateurs</div>
+        <div class="ap-section-subtitle">Gérez les participants et leurs données</div>
+        <div class="ap-toolbar">
+          <input type="text" class="ap-input" id="usr-search" placeholder="🔍 Rechercher un utilisateur..." style="width:260px;" oninput="filterUsers()">
+          <div class="ap-toolbar-right">
+            <button class="ap-btn ap-btn-secondary" onclick="exportUsersCSV()">📤 Exporter CSV</button>
+          </div>
+        </div>
+        <div class="ap-table-wrap">
+          <table class="ap-table">
+            <thead><tr><th>Nom</th><th>Tentatives</th><th>Score moyen</th><th>Meilleur score</th><th>Aides IA</th><th>Dernière activité</th><th>Actions</th></tr></thead>
+            <tbody id="usr-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── 5. RESULTS ── -->
+      <div class="ap-section" id="ap-results">
+        <div class="ap-section-title">🏆 Résultats</div>
+        <div class="ap-section-subtitle">Toutes les tentatives avec filtres avancés</div>
+        <div class="ap-toolbar" style="flex-wrap:wrap;gap:0.5rem;">
+          <input type="text" class="ap-input" id="res-search" placeholder="🔍 Nom..." style="width:180px;" oninput="filterResults()">
+          <select class="ap-select" id="res-filter-quiz" onchange="filterResults()">
+            <option value="">Tous les quiz</option>
+          </select>
+          <select class="ap-select" id="res-filter-score" onchange="filterResults()">
+            <option value="">Tous les scores</option>
+            <option value="high">≥ 80%</option>
+            <option value="mid">50–79%</option>
+            <option value="low">&lt; 50%</option>
+          </select>
+          <div class="ap-toolbar-right">
+            <span style="font-size:0.8rem;color:#475569;" id="res-count"></span>
+            <button class="ap-btn ap-btn-secondary" onclick="exportResultsCSV()">📤 CSV</button>
+          </div>
+        </div>
+        <div class="ap-table-wrap">
+          <table class="ap-table">
+            <thead><tr><th>Participant</th><th>Quiz</th><th>Score</th><th>Aide IA</th><th>Raison</th><th>Date</th></tr></thead>
+            <tbody id="res-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── 6. ANALYTICS ── -->
+      <div class="ap-section" id="ap-analytics">
+        <div class="ap-section-title">📈 Analytics</div>
+        <div class="ap-section-subtitle">Insights avancés sur les performances</div>
+
+        <div class="ap-stats-grid" id="ana-stats" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:1.5rem;"></div>
+
+        <div class="ap-charts-grid">
+          <div class="ap-card">
+            <div class="ap-card-header"><div><div class="ap-card-title">🌡️ Taux de réussite par quiz</div><div class="ap-card-subtitle">Heatmap de difficulté</div></div></div>
+            <div class="heatmap-grid" id="ana-heatmap"></div>
+          </div>
+          <div class="ap-card">
+            <div class="ap-card-header"><div><div class="ap-card-title">❌ Questions les plus échouées</div><div class="ap-card-subtitle">Taux d'erreur</div></div></div>
+            <div class="ap-bar-chart" id="ana-failed-q"></div>
+          </div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-header"><div><div class="ap-card-title">🤖 Impact de l'aide IA</div><div class="ap-card-subtitle">Participants avec vs sans aide IA</div></div></div>
+          <div id="ana-ai-impact" style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;"></div>
+        </div>
+      </div>
+
+      <!-- ── 7. AI TOOLS ── -->
+      <div class="ap-section" id="ap-aitools">
+        <div class="ap-section-title">🤖 AI Tools</div>
+        <div class="ap-section-subtitle">Utilisez l'IA pour créer, améliorer et analyser vos quiz</div>
+
+        <div class="ap-charts-grid">
+          <div class="ap-card">
+            <div class="ap-card-header"><div><div class="ap-card-title">✨ Générateur de questions</div><div class="ap-card-subtitle">L'IA crée des questions prêtes à l'emploi</div></div></div>
+            <div style="margin-bottom:1rem;">
+              <label class="ap-label">Sujet</label>
+              <input type="text" class="ap-input" id="ai-gen-topic" placeholder="Ex: Révolution Française, Python, Photosynthèse..." style="width:100%;margin-bottom:0.75rem;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+                <div>
+                  <label class="ap-label">Nombre de questions</label>
+                  <select class="ap-select" id="ai-gen-count" style="width:100%;">
+                    <option value="3">3 questions</option>
+                    <option value="5" selected>5 questions</option>
+                    <option value="10">10 questions</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ap-label">Difficulté</label>
+                  <select class="ap-select" id="ai-gen-diff" style="width:100%;">
+                    <option value="facile">Facile</option>
+                    <option value="moyen" selected>Moyen</option>
+                    <option value="difficile">Difficile</option>
+                  </select>
+                </div>
+              </div>
+              <button class="ap-btn ap-btn-primary" style="width:100%;" onclick="aiGenerateQuestions()">🚀 Générer les questions</button>
+            </div>
+            <div id="ai-gen-result" style="display:none;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                <div style="color:#4ade80;font-size:0.875rem;font-weight:600;" id="ai-gen-status"></div>
+                <button class="ap-btn ap-btn-success ap-btn-sm" onclick="addGeneratedToQuiz()">+ Ajouter à un quiz</button>
+              </div>
+              <div id="ai-gen-questions-list"></div>
+            </div>
+          </div>
+
+          <div class="ap-card" style="display:flex;flex-direction:column;">
+            <div class="ap-card-header"><div><div class="ap-card-title">💬 Assistant Admin</div><div class="ap-card-subtitle">Posez n'importe quelle question sur votre plateforme</div></div></div>
+            <div class="ai-quick-btns">
+              <span class="ai-quick-btn" onclick="aiAdminQuick('Quels quiz ont le plus faible taux de réussite?')">📉 Quiz difficiles</span>
+              <span class="ai-quick-btn" onclick="aiAdminQuick('Génère une description accrocheuse pour un quiz de mathématiques.')">✍️ Description quiz</span>
+              <span class="ai-quick-btn" onclick="aiAdminQuick('Donne-moi des conseils pour améliorer l\'engagement des participants.')">💡 Conseils engagement</span>
+              <span class="ai-quick-btn" onclick="aiAdminQuick('Comment structurer un quiz éducatif efficace?')">🎓 Bonne structure</span>
+            </div>
+            <div class="ai-chat" style="flex:1;">
+              <div class="ai-chat-messages" id="ai-admin-messages"></div>
+              <div class="ai-chat-input">
+                <input type="text" id="ai-admin-input" placeholder="Demandez quelque chose à l'IA..." onkeypress="if(event.key==='Enter')aiAdminSend()">
+                <button class="ap-btn ap-btn-primary" onclick="aiAdminSend()">→</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-header"><div><div class="ap-card-title">🔧 Amélioration de question</div><div class="ap-card-subtitle">L'IA reformule et améliore une question existante</div></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start;">
+            <div>
+              <label class="ap-label">Question originale</label>
+              <textarea class="ap-textarea" id="ai-improve-input" rows="4" placeholder="Collez ici une question à améliorer..."></textarea>
+              <button class="ap-btn ap-btn-primary" style="width:100%;margin-top:0.75rem;" onclick="aiImproveQuestion()">✨ Améliorer</button>
+            </div>
+            <div>
+              <label class="ap-label">Version améliorée par l'IA</label>
+              <div id="ai-improve-output" style="background:#1e293b;border:1px solid #334155;border-radius:0.625rem;padding:0.875rem;min-height:100px;color:#94a3b8;font-size:0.875rem;line-height:1.6;">L'IA améliorera la question ici...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 8. MODERATION ── -->
+      <div class="ap-section" id="ap-moderation">
+        <div class="ap-section-title">🛡️ Modération</div>
+        <div class="ap-section-subtitle">Détection automatique de comportements suspects</div>
+
+        <div class="ap-stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1.5rem;" id="mod-stats"></div>
+
+        <div class="ap-card">
+          <div class="ap-card-header"><div><div class="ap-card-title">🚨 Scores suspects</div><div class="ap-card-subtitle">Scores parfaits avec aide IA ou tentatives multiples rapides</div></div></div>
+          <div id="mod-suspicious"></div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-header"><div><div class="ap-card-title">🤖 Usage excessif de l'IA</div><div class="ap-card-subtitle">Utilisateurs ayant demandé beaucoup d'aides IA</div></div></div>
+          <div id="mod-ai-abuse"></div>
+        </div>
+      </div>
+
+      <!-- ── 10. ANNOUNCEMENTS ── -->
+      <div class="ap-section" id="ap-announcements">
+        <div class="ap-section-title">📢 Annonces</div>
+        <div class="ap-section-subtitle">Publiez des messages visibles par tous les utilisateurs (maintenance, nouveautés, etc.)</div>
+
+        <div class="ap-card">
+          <div class="ap-card-title" style="margin-bottom:1.25rem;">📝 Publier une annonce</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+            <div>
+              <label class="ap-label">Icône</label>
+              <input type="text" class="ap-input" id="ann-icon" value="📢" style="width:100%;" placeholder="Emoji icône">
+            </div>
+            <div>
+              <label class="ap-label">Type / Couleur</label>
+              <select class="ap-select" id="ann-color" style="width:100%;">
+                <option value="warning">⚠️ Avertissement (orange)</option>
+                <option value="danger">🚨 Danger (rouge)</option>
+                <option value="info">ℹ️ Info (bleu)</option>
+                <option value="success">✅ Succès (vert)</option>
+                <option value="dark">🌑 Sombre</option>
+              </select>
+            </div>
+          </div>
+          <label class="ap-label">Texte de l'annonce</label>
+          <textarea class="ap-textarea" id="ann-text" rows="3" style="margin-bottom:1rem;" placeholder="Ex: Maintenance prévue le 10 janvier de 22h à 23h. Merci de votre compréhension."></textarea>
+          <div style="display:flex;gap:0.75rem;">
+            <button class="ap-btn ap-btn-primary" onclick="saveAnnouncement()">📢 Publier l'annonce</button>
+            <button class="ap-btn ap-btn-danger" onclick="clearAnnouncement()">🗑 Retirer l'annonce active</button>
+          </div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-title" style="margin-bottom:0.875rem;">📋 Aperçu des exemples</div>
+          <div style="padding:0.875rem 1.5rem;background:linear-gradient(135deg,#f59e0b,#f97316);color:white;border-radius:0.75rem;margin-bottom:0.625rem;font-weight:600;">⚠️ Maintenance prévue ce soir de 22h à 23h.</div>
+          <div style="padding:0.875rem 1.5rem;background:linear-gradient(135deg,#3b82f6,#6366f1);color:white;border-radius:0.75rem;margin-bottom:0.625rem;font-weight:600;">ℹ️ Nouvelle fonctionnalité : Révisions IA maintenant disponibles !</div>
+          <div style="padding:0.875rem 1.5rem;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border-radius:0.75rem;font-weight:600;">🚨 Le serveur est en maintenance. Les résultats ne sont pas sauvegardés.</div>
+        </div>
+      </div>
+
+      <!-- ── 9. SETTINGS ── -->
+      <div class="ap-section" id="ap-settings">
+        <div class="ap-section-title">⚙️ Paramètres</div>
+        <div class="ap-section-subtitle">Configuration de la plateforme</div>
+
+        <div class="ap-card">
+          <div class="settings-section">
+            <div class="settings-section-title">🌐 Général</div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Nom de la plateforme</h4><p>Nom affiché aux utilisateurs</p></div>
+              <input type="text" class="ap-input" value="QuizMaster" style="width:200px;">
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Pénalité IA</h4><p>Pourcentage déduit si l'aide IA est utilisée</p></div>
+              <select class="ap-select">
+                <option value="20" selected>-20%</option>
+                <option value="10">-10%</option>
+                <option value="0">Aucune</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Mode révision IA</h4><p>Permettre aux utilisateurs d'accéder aux révisions IA</p></div>
+              <label class="ap-toggle"><input type="checkbox" checked><span class="ap-toggle-slider"></span></label>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">🌐 Langue de l'interface</div>
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;padding:0.875rem 0;">
+              <button class="lang-btn ap-btn" data-lang="fr" onclick="setLanguage('fr')" style="background:#4f46e5;color:white;border:1px solid #4f46e5;">🇫🇷 Français</button>
+              <button class="lang-btn ap-btn" data-lang="en" onclick="setLanguage('en')" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;">🇬🇧 English</button>
+              <button class="lang-btn ap-btn" data-lang="es" onclick="setLanguage('es')" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;">🇪🇸 Español</button>
+              <button class="lang-btn ap-btn" data-lang="de" onclick="setLanguage('de')" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;">🇩🇪 Deutsch</button>
+              <button class="lang-btn ap-btn" data-lang="pt" onclick="setLanguage('pt')" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;">🇧🇷 Português</button>
+            </div>
+            <div style="font-size:0.75rem;color:#475569;padding-bottom:0.5rem;">Note: la traduction complète nécessite d'étendre le dictionnaire TRANSLATIONS dans le code source.</div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">🔒 Sécurité</div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Détection de triche</h4><p>Réinitialiser le quiz si l'utilisateur change d'onglet</p></div>
+              <label class="ap-toggle"><input type="checkbox" checked><span class="ap-toggle-slider"></span></label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Identifiants admin</h4><p>Modifiez dans le code source (lignes ADMIN_USERNAME/PASSWORD)</p></div>
+              <span class="badge badge-amber">Hardcoded</span>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">🗄️ Firebase</div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Collections Firestore</h4><p>quizzes · results</p></div>
+              <span class="badge badge-green" id="fb-status">Connecté</span>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info"><h4>Effacer tous les résultats</h4><p>Action irréversible</p></div>
+              <button class="ap-btn ap-btn-danger ap-btn-sm" onclick="if(confirm('Effacer TOUS les résultats ?'))clearAllResults()">🗑 Effacer</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">👑 Comptes Administrateurs</div>
+            <div style="font-size:0.8rem;color:#475569;margin-bottom:0.75rem;">Les comptes sont définis dans le code source (tableau ADMINS). Les mots de passe sont hashés en SHA-256.</div>
+            <div id="admins-list-settings"></div>
+            <div style="font-size:0.75rem;color:#475569;margin-top:0.75rem;">Pour ajouter / supprimer un admin : modifiez le tableau ADMINS et utilisez <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" style="color:#6366f1;">ce générateur de hash</a>.</div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+            <button class="ap-btn ap-btn-primary" onclick="showToast('success','Paramètres sauvegardés !')">💾 Sauvegarder</button>
+          </div>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-title" style="margin-bottom:1rem;">📋 Structure Firestore recommandée</div>
+          <pre style="background:#0b1120;border:1px solid #1f2d3d;border-radius:0.625rem;padding:1.25rem;color:#86efac;font-size:0.78rem;overflow-x:auto;line-height:1.8;">quizzes/
+  {quizId}/
+    title, description, difficulty, category, status
+    published (bool), createdAt
+    questions[] → {id, text, answers[], isCorrect}
+
+results/
+  {resultId}/
+    firstName, lastName, reason
+    quizTitle, score, total, aiHelpCount
+    date, savedAt</pre>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+
+<!-- QUESTION MODAL -->
+<div id="question-modal" class="qmodal-overlay hidden" onclick="closeModalOnOverlay(event)">
+    <div class="qmodal" onclick="event.stopPropagation()">
+
+        <!-- Modal header -->
+        <div class="qmodal-header">
+            <div class="qmodal-title">
+                <span style="width:32px;height:32px;border-radius:0.5rem;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:0.9rem;">❓</span>
+                <span id="modal-title">Nouvelle Question</span>
+            </div>
+            <button onclick="closeQuestionModal()" style="background:none;border:none;color:#475569;cursor:pointer;font-size:1.375rem;line-height:1;padding:0.25rem;">&times;</button>
+        </div>
+
+        <div class="qmodal-body">
+            <!-- Question text -->
+            <div class="qmodal-section-label">Texte de la question</div>
+            <textarea id="modal-question-text" class="qmodal-textarea" placeholder="Ex: Quelle est la capitale du Canada ?"></textarea>
+
+            <!-- Answers -->
+            <div class="qmodal-section-label">
+                <span>Réponses</span>
+                <button onclick="addAnswerToModal()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:0.25rem 0.75rem;border-radius:9999px;cursor:pointer;font-size:0.75rem;font-weight:700;">+ Ajouter</button>
+            </div>
+            <div id="modal-answers-list"></div>
+            <div class="qmodal-hint">
+                <span style="font-size:0.9rem;">💡</span>
+                Cliquez sur ○ pour marquer la bonne réponse — Au moins 1 correcte requise
+            </div>
+        </div>
+
+        <!-- Modal footer -->
+        <div class="qmodal-footer">
+            <button class="qmodal-btn-cancel" onclick="closeQuestionModal()">Annuler</button>
+            <button class="qmodal-btn-save" onclick="saveQuestion()">✓ Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// =========================================================
+// ===== FIREBASE CONFIG — REMPLACEZ CES VALEURS =====
+// Allez sur https://console.firebase.google.com
+// Creez un projet -> Ajouter une application web -> copiez la config
+// =========================================================
+// Firebase config is loaded from the server at /api/config
+// Set env vars in Railway: FIREBASE_API_KEY, FIREBASE_PROJECT_ID, etc.
+// firebaseConfig and GROQ_MODEL will be populated by initApp() below.
+let firebaseConfig = {};
+
+// ── Hashed admin accounts (SHA-256 passwords) ──
+// To add/remove admins edit this array.
+// Hash your password at: https://emn178.github.io/online-tools/sha256.html
+const ADMINS = [
+    {
+        username: "ThéoDO",
+        // password: h3d3p1c2
+        hash: "65fe8468810ae71bec01dc03fd9b2fefffc5c6e2d5e06b9b37e57f2359e28036"
+    },
+    {
+        username: "GabrielDCO",
+        // password: DeVeloPementteamQM
+        hash: "955abe0b713fc987d175b3bce2695e064c0c03cb90c1dce2dd49cc8717ac9c7a"
+    }
+];
+
+async function sha256(msg) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// GROQ_API_KEY is NEVER in frontend code — all AI calls go to /api/ai
+// GROQ_MODEL is fetched from /api/config at startup
+let GROQ_MODEL = 'llama-3.1-8b-instant'; // will be overwritten by /api/config
+
+// ── Firebase init — populated after /api/config fetch ─────────────────────
+let db, quizzesCol, resultsCol, announcementsCol, notificationsCol;
+
+async function initApp() {
+  try {
+    const res = await fetch('/api/config');
+    const body = await res.json().catch(() => ({}));
+
+    // Server is running but env vars are not set yet
+    if (res.status === 503 && body.missing_variables) {
+      const missing = body.missing_variables.join(', ');
+      showFallbackBanner(
+        '⚙️ Variables manquantes sur Railway : ' + missing +
+        ' — Railway dashboard → Variables → ajoutez-les → Redeploy.'
+      );
+      loadLocalFallback();
+      throw new Error('Missing env vars: ' + missing);
+    }
+
+    if (!res.ok) throw new Error('Config fetch failed: ' + res.status);
+
+    firebaseConfig = body.firebase;
+    GROQ_MODEL     = body.groqModel || 'llama-3.1-8b-instant';
+
+    firebase.initializeApp(firebaseConfig);
+    db                = firebase.firestore();
+    quizzesCol        = db.collection('quizzes');
+    resultsCol        = db.collection('results');
+    announcementsCol  = db.collection('announcements');
+    notificationsCol  = db.collection('notifications');
+
+  } catch (err) {
+    console.error('initApp failed:', err.message);
+    if (!document.getElementById('offline-banner')) {
+      showFallbackBanner('⚠️ Impossible de charger la configuration. Vérifiez Railway → Logs pour le détail.');
+    }
+    loadLocalFallback();
+    throw err;
+  }
+}
+
+// ── App state ─────────────────────────────────────
+let state = {
+    userData: { firstName:'', lastName:'', reason:'', aiHelpCount:0 },
+    quizzes:  [],
+    currentQuiz: null,
+    currentQuestionIndex: 0,
+    userAnswers: [],        // [{questionId, answerIds}]
+    questionTimings: [],    // [{questionId, timeSpent}]
+    quizStartTime: null,
+    currentAdmin: null,     // logged-in admin username
+    editingQuiz: null,
+    editingQuestion: null,
+    lastResult: null,       // stored for review screen
+};
+
+// ── Bootstrap ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('user-form').addEventListener('submit', handleUserFormSubmit);
+    document.getElementById('admin-login-form').addEventListener('submit', handleAdminLogin);
+
+    try {
+        // 1. Fetch config from server & init Firebase
+        await initApp();
+        // 2. Load quizzes + announcements, then listen for live updates
+        await loadQuizzes();
+        listenForQuizUpdates();
+        listenForAnnouncements();
+    } catch (err) {
+        console.error('Firebase error:', err);
+        showFallbackBanner('⚠️ Impossible de se connecter à Firebase. Vérifiez votre connexion internet et la configuration Firebase.');
+        loadLocalFallback();
+        showToast('error', 'Erreur Firebase: ' + err.message + ' — Verifiez votre config.');
+    }
+
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('user-form-view').classList.remove('hidden');
+});
+
+// ── Firebase: quizzes ─────────────────────────────
+async function loadQuizzes() {
+    // No orderBy — avoids needing Firestore index for quizzes without createdAt
+    const snap = await quizzesCol.get();
+    state.quizzes = snap.docs
+        .map(doc => ({ firestoreId: doc.id, ...doc.data() }))
+        .filter(q => q && q.title);
+}
+
+function listenForQuizUpdates() {
+    quizzesCol.onSnapshot(snap => {
+        state.quizzes = snap.docs
+            .map(doc => ({ firestoreId: doc.id, ...doc.data() }))
+            .filter(q => q && q.title);
+        if (!document.getElementById('quiz-list-view').classList.contains('hidden')) {
+            renderQuizList();
+        }
+        if (!document.getElementById('admin-view').classList.contains('hidden')) {
+            renderAdminQuizzes();
+        }
+    }, err => {
+        console.warn('Quiz listener error:', err.message);
+        showFallbackBanner('Connexion Firestore perdue. Mode hors-ligne activé.');
+    });
+}
+
+async function saveQuizToFirebase(quiz) {
+    const { firestoreId, ...data } = quiz;
+    if (firestoreId) {
+        await quizzesCol.doc(firestoreId).set(data);
+        return firestoreId;
+    } else {
+        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        const ref = await quizzesCol.add(data);
+        return ref.id;
+    }
+}
+
+async function deleteQuizFromFirebase(firestoreId) {
+    await quizzesCol.doc(firestoreId).delete();
+}
+
+async function saveResultToFirebase(result) {
+    await resultsCol.add({ ...result, savedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    // Notify admins in real-time
+    var pct = Math.round((result.score/result.total)*100);
+    var icon = pct>=70 ? '✅' : '⚠️';
+    sendAdminNotification('result',
+        icon + ' ' + result.firstName + ' ' + result.lastName +
+        ' a complété "' + result.quizTitle + '" — ' + pct + '% (' + result.score + '/' + result.total + ')' +
+        (result.aiHelpCount > 0 ? ' [IA x'+result.aiHelpCount+']' : ''),
+        icon
+    );
+}
+
+// ── NAVIGATION ────────────────────────────────────
+function hideAllViews() {
+    ['user-form-view','admin-login-view','quiz-list-view','quiz-view','result-view',
+     'answer-review-view','admin-view','revisions-view']
+        .forEach(id => { const el=document.getElementById(id); if(el)el.classList.add('hidden'); });
+}
+function showUserForm() {
+    hideAllViews();
+    document.getElementById('user-form-view').classList.remove('hidden');
+    state.userData = { firstName:'', lastName:'', reason:'', aiHelpCount:0 };
+    document.getElementById('user-form').reset();
+}
+function showAdminLogin() { hideAllViews(); document.getElementById('admin-login-view').classList.remove('hidden'); }
+function showQuizList()   { hideAllViews(); document.getElementById('quiz-list-view').classList.remove('hidden'); document.getElementById('user-greeting').textContent = t('greeting') + ' ' + state.userData.firstName + ' ' + state.userData.lastName + ' !'; renderQuizList(); renderUserHistory(); }
+function showQuizView()   { hideAllViews(); document.getElementById('quiz-view').classList.remove('hidden'); const b=document.getElementById('ai-assistant-btn'); if(b)b.style.display='flex'; renderQuestion(); }
+function showResultView() { hideAllViews(); document.getElementById('result-view').classList.remove('hidden'); const b=document.getElementById('ai-assistant-btn'); if(b)b.style.display='none'; const p=document.getElementById('ai-panel'); if(p)p.style.display='none'; }
+function showRevisions()  { hideAllViews(); document.getElementById('revisions-view').classList.remove('hidden'); }
+function backToQuizList() { showQuizList(); }
+
+// ── USER FORM ─────────────────────────────────────
+function handleUserFormSubmit(e) {
+    e.preventDefault();
+    state.userData.firstName = document.getElementById('firstName').value;
+    state.userData.lastName  = document.getElementById('lastName').value;
+    state.userData.reason    = document.getElementById('reason').value;
+    showQuizList();
+}
+
+// ── QUIZ LIST ─────────────────────────────────────
+function renderQuizList() {
+    const grid = document.getElementById('quiz-grid');
+    if (!state.quizzes.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#64748b;"><p style="font-size:1.5rem;">Aucun quiz disponible pour le moment.</p></div>';
+        return;
+    }
+    grid.innerHTML = state.quizzes
+        .filter(q => q && q.title && (q.status||'published') === 'published')
+        .map(q => {
+            const qLen = (q.questions||[]).length;
+            const diff  = q.difficulty === 'hard'   ? '🔴 Difficile'
+                        : q.difficulty === 'medium' ? '🟡 Moyen' : '🟢 Facile';
+            return `<div class="quiz-card" onclick="startQuiz('${q.firestoreId}')">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem;">
+                    <h3 style="margin:0;">${q.title}</h3>
+                    <span style="font-size:0.7rem;white-space:nowrap;margin-left:0.5rem;">${diff}</span>
+                </div>
+                <p>${q.description||'Aucune description.'}</p>
+                <div class="quiz-card-footer">
+                    <span>${qLen} question${qLen>1?'s':''}</span>
+                    <span class="start-text">Commencer &rarr;</span>
+                </div>
+            </div>`;
+        }).join('') ||
+        '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#64748b;"><p style="font-size:1.25rem;">Aucun quiz disponible pour le moment.</p></div>';
+}
+
+function startQuiz(firestoreId) {
+    const quiz = state.quizzes.find(q => q.firestoreId === firestoreId);
+    if (!quiz) return;
+    // Only show published quizzes to users
+    if ((quiz.status||'published') === 'draft') { showToast('info','Ce quiz n\'est pas encore disponible.'); return; }
+    state.currentQuiz = quiz;
+    state.currentQuestionIndex = 0;
+    state.userAnswers = [];
+    state.userData.aiHelpCount = 0;
+    state.quizStartTime = Date.now();
+    state.lastResult = null;
+    showQuizView();
+}
+
+// ── QUIZ ──────────────────────────────────────────
+function renderQuestion() {
+    startQuestionTimer();
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const total = state.currentQuiz.questions.length;
+    const pct = ((state.currentQuestionIndex+1)/total)*100;
+    document.getElementById('progress-text').textContent = t('question')+' '+(state.currentQuestionIndex+1)+' '+t('of')+' '+total;
+    document.getElementById('progress-bar').style.width = pct+'%';
+    document.getElementById('question-text').textContent = q.text;
+    const ua = state.userAnswers.find(a=>a.questionId===q.id);
+    const sel = ua ? ua.answerIds : [];
+    document.getElementById('answers-list').innerHTML = q.answers.map(a=>`
+        <button class="answer-btn ${sel.includes(a.id)?'selected':''}" onclick="handleAnswer(${q.id},${a.id})">
+            <div class="answer-radio"><div class="answer-radio-dot"></div></div>${a.text}
+        </button>`).join('');
+    // Next button
+    const nb = document.getElementById('next-btn');
+    nb.disabled = !sel.length;
+    nb.textContent = state.currentQuestionIndex < total-1 ? t('next') : t('finish');
+    // Prev button
+    const pb = document.getElementById('prev-btn');
+    if (pb) pb.style.display = state.currentQuestionIndex > 0 ? 'block' : 'none';
+}
+
+function handleAnswer(qId, aId) {
+    let ua = state.userAnswers.find(a=>a.questionId===qId);
+    if(ua) ua.answerIds = ua.answerIds.includes(aId) ? ua.answerIds.filter(x=>x!==aId) : [...ua.answerIds,aId];
+    else state.userAnswers.push({questionId:qId, answerIds:[aId]});
+    renderQuestion();
+}
+
+function nextQuestion() {
+    if(state.currentQuestionIndex < state.currentQuiz.questions.length-1){
+        state.currentQuestionIndex++;
+        renderQuestion();
+    } else finishQuiz();
+}
+
+function prevQuestion() {
+    if(state.currentQuestionIndex > 0){
+        state.currentQuestionIndex--;
+        renderQuestion();
+    }
+}
+
+function quitQuiz() {
+    if(confirm('Quitter ce quiz ? Votre progression sera perdue.')) {
+        state.currentQuiz = null;
+        state.currentQuestionIndex = 0;
+        state.userAnswers = [];
+        state.quizStartTime = null;
+        const aiBtn = document.getElementById('ai-assistant-btn');
+        if(aiBtn) aiBtn.style.display='none';
+        const aiPanel = document.getElementById('ai-panel');
+        if(aiPanel) aiPanel.style.display='none';
+        showQuizList();
+    }
+}
+
+async function finishQuiz() {
+    let score = 0;
+    const breakdown = [];
+    state.currentQuiz.questions.forEach(q => {
+        const ua = state.userAnswers.find(a=>a.questionId===q.id);
+        const correctIds = q.answers.filter(a=>a.isCorrect).map(a=>a.id).sort();
+        const givenIds   = ua ? [...ua.answerIds].sort() : [];
+        const isCorrect  = JSON.stringify(givenIds)===JSON.stringify(correctIds);
+        if(isCorrect) score++;
+        breakdown.push({
+            questionId: q.id,
+            questionText: q.text,
+            answers: q.answers,
+            givenIds,
+            correctIds,
+            isCorrect
+        });
+    });
+    const timeSpent = state.quizStartTime ? Math.round((Date.now()-state.quizStartTime)/1000) : 0;
+    const result = {
+        firstName: state.userData.firstName, lastName: state.userData.lastName,
+        reason: state.userData.reason, quizTitle: state.currentQuiz.title,
+        score, total: state.currentQuiz.questions.length,
+        aiHelpCount: state.userData.aiHelpCount||0,
+        date: new Date().toISOString(),
+        timeSpent,
+        breakdown
+    };
+    state.lastResult = result;
+    saveToUserHistory(result);
+    try { await saveResultToFirebase(result); } catch(e){ console.warn('Could not save result:', e); }
+    displayResult(result);
+}
+
+function displayResult(result) {
+    const base = Math.round((result.score/result.total)*100);
+    const pct  = Math.max(0, base-(result.aiHelpCount>0?20:0));
+    document.getElementById('result-icon').innerHTML = pct>=70
+        ? '<svg class="result-icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
+        : '<svg class="result-icon partial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+    document.getElementById('result-title').textContent = pct>=70 ? t('congrats') : t('tryAgain');
+    const circle = document.getElementById('percentage-circle-progress');
+    const circ = 2*Math.PI*90;
+    circle.style.strokeDasharray = circ; circle.style.strokeDashoffset = circ;
+    circle.className = 'percentage-circle-progress '+(pct>=70?'good':'partial');
+    setTimeout(()=>{ circle.style.strokeDashoffset = circ-(pct/100)*circ; }, 100);
+    const pt = document.getElementById('percentage-text');
+    let cur=0; const inc=pct/(1500/16);
+    const anim=()=>{ cur+=inc; if(cur<pct){pt.textContent=Math.round(cur)+'%';requestAnimationFrame(anim);}else pt.textContent=pct+'%'; };
+    setTimeout(anim, 100);
+    document.getElementById('correct-answers').textContent = result.score;
+    document.getElementById('wrong-answers').textContent   = result.total-result.score;
+    document.getElementById('total-questions').textContent = result.total;
+    let msg = pct===100?'Score parfait ! 🎉':pct>=90?'Excellent ! 🌟':pct>=70?'Très bien ! 👏':pct>=50?'Pas mal ! 💪':'Continuez à vous améliorer ! 📚';
+    if(result.aiHelpCount>0) msg += '\n\nPénalité -20% pour '+result.aiHelpCount+' aide(s) IA\nScore brut: '+base+'% → Final: '+pct+'%';
+    document.getElementById('result-percentage').textContent = msg;
+    showResultView();
+}
+
+function resetQuiz() {
+    state.userData={firstName:'',lastName:'',reason:'',aiHelpCount:0};
+    state.lastResult=null;
+    showUserForm();
+}
+
+
+// ═══════════════════════════════════════════════════════
+// ADMIN PANEL — GOD TIER JS
+// ═══════════════════════════════════════════════════════
+
+// ── Admin login ───────────────────────────────────────
+async function handleAdminLogin(e) {
+    e.preventDefault();
+    const u = document.getElementById('admin-username').value.trim();
+    const p = document.getElementById('admin-password').value;
+    const hashed = await sha256(p);
+    const admin = ADMINS.find(a => a.username === u && a.hash === hashed);
+    if (admin) {
+        state.currentAdmin = admin.username;
+        hideAllViews();
+        document.getElementById('admin-view').classList.remove('hidden');
+        apNav('dashboard');
+        showToast('success', '👋 Bienvenue, ' + admin.username + ' !');
+        startAdminNotificationListener();
+        startDashboardAutoRefresh();
+        requestNotificationPermission();
+    } else {
+        showToast('error', 'Identifiants incorrects');
+    }
+}
+function logout() { showUserForm(); }
+
+// ── Admin section navigation ──────────────────────────
+function apNav(section) {
+    // Hide all sections
+    document.querySelectorAll('.ap-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.ap-nav-item').forEach(n => n.classList.remove('active'));
+    // Show quiz editor area if in quizmanager
+    const editor = document.getElementById('ap-quiz-editor');
+    const listView = document.getElementById('qm-list-view');
+    if (editor) { editor.style.display = 'none'; editor.classList.remove('active'); }
+    if (listView) listView.style.display = 'block';
+    // Activate
+    const sec = document.getElementById('ap-' + section);
+    if (sec) sec.classList.add('active');
+    const nav = document.getElementById('nav-' + section);
+    if (nav) nav.classList.add('active');
+    // Load data for section
+    switch(section) {
+        case 'dashboard':   loadDashboard(); break;
+        case 'quizmanager': renderAdminQuizzes(); break;
+        case 'questionbank': renderQuestionBank(); break;
+        case 'users':       loadUsers(); break;
+        case 'results':     loadResults(); break;
+        case 'analytics':   loadAnalytics(); break;
+        case 'aitools':     initAITools(); break;
+        case 'moderation':     loadModeration(); break;
+        case 'announcements':  /* static section */ break;
+        case 'settings': {
+            var al = document.getElementById('admins-list-settings');
+            if (al) al.innerHTML = ADMINS.map(function(a){ return '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.625rem 0;border-bottom:1px solid #1a2332;"><span style="font-size:1.25rem;">👤</span><div><div style="color:white;font-weight:600;font-size:0.875rem;">'+a.username+'</div><div style="font-size:0.72rem;color:#475569;font-family:monospace;">'+a.hash.slice(0,24)+'…</div></div><span class="badge badge-purple" style="margin-left:auto;">Admin</span></div>'; }).join('');
+            break;
+        }
+    }
+}
+
+// ── DASHBOARD ─────────────────────────────────────────
+async function loadDashboard() {
+    try {
+        const [qSnap, rSnap] = await Promise.all([
+            quizzesCol.get(),
+            resultsCol.orderBy('savedAt','desc').limit(100).get()
+        ]);
+        const quizzes = qSnap.docs.map(d => ({id:d.id,...d.data()}));
+        const results = rSnap.docs.map(d => d.data());
+
+        const totalQ = quizzes.reduce((s,q)=>s+(q.questions?.length||0),0);
+        const uniqueUsers = [...new Set(results.map(r=>r.firstName+'_'+r.lastName))].length;
+        const avgScore = results.length ? Math.round(results.reduce((s,r)=>s+Math.round((r.score/r.total)*100),0)/results.length) : 0;
+        const totalAI = results.reduce((s,r)=>s+(r.aiHelpCount||0),0);
+
+        setText('ds-quizzes', quizzes.length);
+        setText('ds-questions', totalQ);
+        setText('ds-attempts', results.length);
+        setText('ds-avgscore', avgScore+'%');
+        setText('ds-users', uniqueUsers);
+        setText('ds-aihelps', totalAI);
+
+        // Chart: attempts per quiz
+        const attemptsByQuiz = {};
+        results.forEach(r => { attemptsByQuiz[r.quizTitle] = (attemptsByQuiz[r.quizTitle]||0)+1; });
+        const maxAtt = Math.max(...Object.values(attemptsByQuiz), 1);
+        document.getElementById('chart-attempts').innerHTML = Object.entries(attemptsByQuiz)
+            .sort((a,b)=>b[1]-a[1]).slice(0,6).map(([title,cnt])=>`
+            <div class="ap-bar-row">
+                <div class="ap-bar-label" title="${title}">${title}</div>
+                <div class="ap-bar-track"><div class="ap-bar-fill cyan" style="width:${Math.round((cnt/maxAtt)*100)}%"></div></div>
+                <div class="ap-bar-val">${cnt}</div>
+            </div>`).join('') || '<div style="color:#475569;font-size:0.85rem;">Aucune donnée</div>';
+
+        // Chart: avg score per quiz
+        const scoreByQuiz = {};
+        results.forEach(r => {
+            if (!scoreByQuiz[r.quizTitle]) scoreByQuiz[r.quizTitle] = [];
+            scoreByQuiz[r.quizTitle].push(Math.round((r.score/r.total)*100));
+        });
+        document.getElementById('chart-scores').innerHTML = Object.entries(scoreByQuiz)
+            .map(([t,arr])=>[t, Math.round(arr.reduce((s,v)=>s+v,0)/arr.length)])
+            .sort((a,b)=>b[1]-a[1]).slice(0,6).map(([title,avg])=>`
+            <div class="ap-bar-row">
+                <div class="ap-bar-label" title="${title}">${title}</div>
+                <div class="ap-bar-track"><div class="ap-bar-fill ${avg>=70?'green':avg>=50?'amber':'rose'}" style="width:${avg}%"></div></div>
+                <div class="ap-bar-val">${avg}%</div>
+            </div>`).join('') || '<div style="color:#475569;font-size:0.85rem;">Aucune donnée</div>';
+
+        // Activity feed
+        const colors = ['green','blue','purple','amber'];
+        document.getElementById('dash-activity').innerHTML = results.slice(0,8).map((r,i)=>{
+            const pct = Math.round((r.score/r.total)*100);
+            return `<div class="ap-activity-item">
+                <div class="ap-activity-dot ${colors[i%4]}"></div>
+                <div>
+                    <div class="ap-activity-text"><strong>${r.firstName} ${r.lastName}</strong> a obtenu <strong>${pct}%</strong> sur <strong>${r.quizTitle}</strong>${r.aiHelpCount>0?' 🤖':''}</div>
+                    <div class="ap-activity-time">${formatDate(r.date)}</div>
+                </div>
+            </div>`;
+        }).join('') || '<div style="color:#475569;font-size:0.85rem;padding:1rem 0;">Aucune activité récente</div>';
+
+    } catch(err) { showToast('error', 'Erreur dashboard: '+err.message); }
+}
+
+// ── QUIZ MANAGER ──────────────────────────────────────
+function renderAdminQuizzes() {
+    const search = (document.getElementById('qm-search')?.value||'').toLowerCase();
+    const statusF = document.getElementById('qm-filter-status')?.value||'';
+    const filtered = state.quizzes.filter(q =>
+        q && q.title &&
+        q.title.toLowerCase().includes(search) &&
+        (!statusF || (q.status||'published') === statusF)
+    );
+    const diffBadge = d => d==='hard'?'<span class="badge badge-red">Difficile</span>':d==='medium'?'<span class="badge badge-amber">Moyen</span>':'<span class="badge badge-green">Facile</span>';
+    const statusBadge = s => (s||'published')==='published'?'<span class="badge badge-green">✅ Publié</span>':'<span class="badge badge-gray">📝 Brouillon</span>';
+
+    document.getElementById('qm-table-body').innerHTML = filtered.length ? filtered.map(q=>`
+        <tr>
+            <td class="bold">${q.title}</td>
+            <td>${q.questions?.length||0} Q</td>
+            <td>${diffBadge(q.difficulty||'easy')}</td>
+            <td>${statusBadge(q.status)}</td>
+            <td><span style="color:#94a3b8;">${countAttempts(q.title)}</span></td>
+            <td>
+                <div style="display:flex;gap:0.375rem;">
+                    <button class="ap-btn-icon blue" onclick="editQuiz('${q.firestoreId}')" title="Modifier">✏️</button>
+                    <button class="ap-btn-icon green" onclick="duplicateQuiz('${q.firestoreId}')" title="Dupliquer">📄</button>
+                    <button class="ap-btn-icon" onclick="exportQuizJSON('${q.firestoreId}')" title="Exporter JSON">📥</button>
+                    <button class="ap-btn-icon" onclick="togglePublish('${q.firestoreId}')" title="Publier/Dépublier">🔄</button>
+                    <button class="ap-btn-icon red" onclick="deleteQuiz('${q.firestoreId}')" title="Supprimer">🗑️</button>
+                </div>
+            </td>
+        </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#475569;padding:2rem;">Aucun quiz trouvé</td></tr>';
+}
+function filterAdminQuizzes() { renderAdminQuizzes(); }
+function countAttempts(title) {
+    return cachedResults.filter(r=>r.quizTitle===title).length;
+}
+let cachedResults = [];
+
+function createNewQuiz() {
+    state.editingQuiz = { firestoreId:null, title:'', description:'', difficulty:'easy', category:'', status:'published', questions:[] };
+    showEditQuiz();
+}
+function editQuiz(fid) {
+    state.editingQuiz = JSON.parse(JSON.stringify(state.quizzes.find(q=>q.firestoreId===fid)));
+    showEditQuiz();
+}
+function showEditQuiz() {
+    document.getElementById('qm-list-view').style.display = 'none';
+    const editor = document.getElementById('ap-quiz-editor');
+    editor.style.display = 'block';
+    document.getElementById('qe-page-title').textContent = state.editingQuiz.title || 'Nouveau Quiz';
+    document.getElementById('edit-quiz-title').value = state.editingQuiz.title||'';
+    document.getElementById('edit-quiz-description').value = state.editingQuiz.description||'';
+    document.getElementById('edit-quiz-difficulty').value = state.editingQuiz.difficulty||'easy';
+    document.getElementById('edit-quiz-category').value = state.editingQuiz.category||'';
+    document.getElementById('edit-quiz-status').value = state.editingQuiz.status||'published';
+    renderQuestionsList();
+    updateQCount();
+}
+function cancelEditQuiz() {
+    state.editingQuiz = null;
+    document.getElementById('qm-list-view').style.display = 'block';
+    document.getElementById('ap-quiz-editor').style.display = 'none';
+}
+async function saveQuiz() {
+    const t = document.getElementById('edit-quiz-title').value.trim();
+    if (!t) { showToast('error','Le titre est requis'); return; }
+    state.editingQuiz.title = t;
+    state.editingQuiz.description = document.getElementById('edit-quiz-description').value.trim();
+    state.editingQuiz.difficulty   = document.getElementById('edit-quiz-difficulty').value;
+    state.editingQuiz.category     = document.getElementById('edit-quiz-category').value.trim();
+    state.editingQuiz.status       = document.getElementById('edit-quiz-status').value;
+    const btn = document.getElementById('btn-save-quiz');
+    btn.disabled=true; btn.textContent='Sauvegarde...';
+    try {
+        const newFid = await saveQuizToFirebase(state.editingQuiz);
+        const idx = state.quizzes.findIndex(q=>q.firestoreId===state.editingQuiz.firestoreId);
+        const isNew = idx < 0;
+        const savedTitle = state.editingQuiz.title;
+        if (idx>=0) state.quizzes[idx]={...state.editingQuiz,firestoreId:newFid};
+        else state.quizzes.push({...state.editingQuiz,firestoreId:newFid});
+        sendAdminNotification('quiz', (isNew?'➕':'✏️')+' Quiz "'+savedTitle+'" '+(isNew?'créé':'modifié')+' par '+(state.currentAdmin||'Admin'), isNew?'➕':'✏️');
+        state.editingQuiz=null;
+        cancelEditQuiz();
+        showToast('success','✅ Quiz sauvegardé sur Firebase !');
+    } catch(err) { showToast('error','Erreur: '+err.message); }
+    finally { btn.disabled=false; btn.textContent='💾 Sauvegarder'; }
+}
+async function deleteQuiz(fid) {
+    if (!confirm('Supprimer ce quiz ?')) return;
+    try {
+        const delQ = state.quizzes.find(q=>q.firestoreId===fid);
+        await deleteQuizFromFirebase(fid);
+        state.quizzes = state.quizzes.filter(q=>q.firestoreId!==fid);
+        sendAdminNotification('quiz', '🗑️ Quiz "' + (delQ?delQ.title:'') + '" supprimé par ' + (state.currentAdmin||'Admin'), '🗑️');
+        renderAdminQuizzes();
+        showToast('info','Quiz supprimé.');
+    } catch(err) { showToast('error','Erreur: '+err.message); }
+}
+async function duplicateQuiz(fid) {
+    const orig = state.quizzes.find(q=>q.firestoreId===fid);
+    if (!orig) return;
+    const copy = JSON.parse(JSON.stringify(orig));
+    copy.firestoreId = null;
+    copy.title = copy.title + ' (copie)';
+    copy.status = 'draft';
+    try {
+        const newFid = await saveQuizToFirebase(copy);
+        copy.firestoreId = newFid;
+        state.quizzes.push(copy);
+        renderAdminQuizzes();
+        showToast('success','Quiz dupliqué en brouillon !');
+    } catch(err) { showToast('error','Erreur: '+err.message); }
+}
+async function togglePublish(fid) {
+    const q = state.quizzes.find(q=>q.firestoreId===fid);
+    if (!q) return;
+    q.status = (q.status||'published')==='published' ? 'draft' : 'published';
+    try {
+        await saveQuizToFirebase(q);
+        renderAdminQuizzes();
+        showToast('info', q.status==='published'?'✅ Quiz publié':'📝 Quiz mis en brouillon');
+    } catch(err) { showToast('error','Erreur: '+err.message); }
+}
+function importQuizJSON() {
+    const input = document.createElement('input');
+    input.type='file'; input.accept='.json';
+    input.onchange = async e => {
+        try {
+            const text = await e.target.files[0].text();
+            const data = JSON.parse(text);
+            const quizData = Array.isArray(data)?data:[data];
+            for (const q of quizData) {
+                q.firestoreId = null;
+                q.status = 'draft';
+                const fid = await saveQuizToFirebase(q);
+                q.firestoreId = fid;
+                state.quizzes.push(q);
+            }
+            renderAdminQuizzes();
+            showToast('success', quizData.length+' quiz importé(s) !');
+        } catch(err) { showToast('error','Erreur JSON: '+err.message); }
+    };
+    input.click();
+}
+
+// ── QUESTIONS ─────────────────────────────────────────
+function updateQCount() {
+    const n = state.editingQuiz?.questions?.length || 0;
+    const el  = document.getElementById('q-count');
+    const el2 = document.getElementById('q-count-badge');
+    if (el)  el.textContent  = n;
+    if (el2) el2.textContent = n;
+}
+function renderQuestionsList() {
+    const qs = state.editingQuiz?.questions || [];
+    // Update both count displays
+    const countEl = document.getElementById('q-count');
+    const badgeEl = document.getElementById('q-count-badge');
+    if (countEl) countEl.textContent = qs.length;
+    if (badgeEl) badgeEl.textContent = qs.length;
+
+    if (!qs.length) {
+        document.getElementById('questions-list').innerHTML = `
+            <div class="q-empty">
+                <div class="q-empty-icon">❓</div>
+                <div class="q-empty-text">Aucune question pour l'instant</div>
+                <div class="q-empty-sub">Cliquez sur "Nouvelle question" pour commencer</div>
+            </div>`;
+        return;
+    }
+
+    document.getElementById('questions-list').innerHTML = qs.map((q,i) => {
+        const answers = (q.answers||[]);
+        const correct = answers.filter(a=>a.isCorrect);
+        const wrong   = answers.filter(a=>!a.isCorrect);
+        return `
+        <div class="q-item">
+            <div class="q-item-header">
+                <div class="q-item-num">
+                    <div class="q-num-badge">${i+1}</div>
+                    <span class="q-num-label">Question ${i+1}</span>
+                    ${correct.length ? `<span style="font-size:0.7rem;color:#4ade80;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);padding:0.15rem 0.5rem;border-radius:9999px;">${correct.length} correcte${correct.length>1?'s':''}</span>` : ''}
+                </div>
+                <div class="q-item-actions">
+                    <button class="ap-btn-icon blue" onclick="editQuestion(${q.id})" title="Modifier" style="width:34px;height:34px;border-radius:0.5rem;border:1px solid rgba(59,130,246,0.2);background:rgba(59,130,246,0.08);">✏️</button>
+                    <button class="ap-btn-icon red" onclick="deleteQuestion(${q.id})" title="Supprimer" style="width:34px;height:34px;border-radius:0.5rem;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.08);">🗑️</button>
+                </div>
+            </div>
+            <div class="q-item-body">
+                <div class="q-text">${q.text || '<em style="color:#334155;">Question sans texte</em>'}</div>
+                <div class="q-answers-grid">
+                    ${answers.map(a=>`
+                        <div class="q-answer-chip ${a.isCorrect?'correct':'wrong'}">
+                            <span class="chip-dot"></span>
+                            ${a.text || '<em>Réponse vide</em>'}
+                        </div>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+    updateQCount();
+}
+function addQuestion(){ state.editingQuestion={id:Date.now(),text:'',answers:[{id:1,text:'',isCorrect:false},{id:2,text:'',isCorrect:false}]}; openQuestionModal(); }
+function editQuestion(id){ state.editingQuestion=JSON.parse(JSON.stringify(state.editingQuiz.questions.find(q=>q.id===id))); openQuestionModal(); }
+function openQuestionModal(){
+    document.getElementById('modal-title').textContent = state.editingQuiz.questions.find(q=>q.id===state.editingQuestion.id)?'Modifier Question':'Nouvelle Question';
+    document.getElementById('modal-question-text').value=state.editingQuestion.text;
+    renderModalAnswers();
+    document.getElementById('question-modal').classList.remove('hidden');
+}
+function closeQuestionModal(){ state.editingQuestion=null; document.getElementById('question-modal').classList.add('hidden'); }
+function closeModalOnOverlay(e){ if(e.target.id==='question-modal') closeQuestionModal(); }
+function renderModalAnswers(){
+    const canDelete = state.editingQuestion.answers.length > 2;
+    document.getElementById('modal-answers-list').innerHTML = state.editingQuestion.answers.map((a,idx) => `
+        <div class="qmodal-answer-row">
+            <button class="qmodal-correct-btn ${a.isCorrect?'active':''}" onclick="toggleAnswerCorrect(${a.id})" title="${a.isCorrect?'Bonne réponse':'Marquer comme correcte'}">
+                ${a.isCorrect ? '✓' : (idx+1)}
+            </button>
+            <input type="text" class="qmodal-answer-input"
+                value="${a.text.replace(/"/g,'&quot;')}"
+                oninput="updateAnswerText(${a.id},this.value)"
+                placeholder="Réponse ${idx+1}...">
+            <button class="qmodal-delete-btn" onclick="removeAnswer(${a.id})" ${canDelete?'':'disabled'} title="Supprimer">✕</button>
+        </div>`).join('');
+}
+function toggleAnswerCorrect(id){ state.editingQuestion.answers.find(a=>a.id===id).isCorrect^=true; renderModalAnswers(); }
+function updateAnswerText(id,t){ state.editingQuestion.answers.find(a=>a.id===id).text=t; }
+function addAnswerToModal(){ const id=Math.max(...state.editingQuestion.answers.map(a=>a.id),0)+1; state.editingQuestion.answers.push({id,text:'',isCorrect:false}); renderModalAnswers(); }
+function removeAnswer(id){ if(state.editingQuestion.answers.length>2){ state.editingQuestion.answers=state.editingQuestion.answers.filter(a=>a.id!==id); renderModalAnswers(); } }
+function saveQuestion(){
+    state.editingQuestion.text=document.getElementById('modal-question-text').value.trim();
+    if(!state.editingQuestion.text){showToast('error','La question est requise');return;}
+    const valid=state.editingQuestion.answers.filter(a=>a.text.trim());
+    if(valid.length<2){showToast('error','Au moins 2 réponses sont requises');return;}
+    if(!valid.some(a=>a.isCorrect)){showToast('error','Au moins une bonne réponse est requise');return;}
+    state.editingQuestion.answers=valid;
+    const i=state.editingQuiz.questions.findIndex(q=>q.id===state.editingQuestion.id);
+    if(i>=0) state.editingQuiz.questions[i]=state.editingQuestion; else state.editingQuiz.questions.push(state.editingQuestion);
+    renderQuestionsList(); closeQuestionModal();
+}
+function deleteQuestion(id){ if(confirm('Supprimer cette question ?')){ state.editingQuiz.questions=state.editingQuiz.questions.filter(q=>q.id!==id); renderQuestionsList(); } }
+
+// ── QUESTION BANK ─────────────────────────────────────
+function renderQuestionBank() {
+    // Populate quiz filter
+    const sel = document.getElementById('qb-filter-quiz');
+    sel.innerHTML = '<option value="">Tous les quiz</option>' +
+        state.quizzes.map(q=>`<option value="${q.firestoreId}">${q.title}</option>`).join('');
+    filterQuestionBank();
+}
+function filterQuestionBank() {
+    const search = (document.getElementById('qb-search')?.value||'').toLowerCase();
+    const quizFid = document.getElementById('qb-filter-quiz')?.value||'';
+    let allQ = [];
+    state.quizzes.forEach(quiz => {
+        if (quizFid && quiz.firestoreId!==quizFid) return;
+        (quiz.questions||[]).forEach(q => {
+            allQ.push({...q, quizTitle:quiz.title, quizFid:quiz.firestoreId});
+        });
+    });
+    if (search) allQ = allQ.filter(q=>q.text.toLowerCase().includes(search));
+    document.getElementById('qb-count').textContent = allQ.length + ' questions';
+    document.getElementById('qb-table-body').innerHTML = allQ.length ? allQ.map(q=>`
+        <tr>
+            <td class="bold" style="max-width:360px;">${q.text}</td>
+            <td><span class="badge badge-blue">${q.quizTitle}</span></td>
+            <td>${(q.answers||[]).length}</td>
+            <td style="color:#4ade80;">${(q.answers||[]).filter(a=>a.isCorrect).map(a=>a.text).join(', ')||'—'}</td>
+        </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#475569;padding:2rem;">Aucune question trouvée</td></tr>';
+}
+
+// ── USERS ─────────────────────────────────────────────
+let cachedUsers = [];
+async function loadUsers() {
+    document.getElementById('usr-table-body').innerHTML='<tr><td colspan="7" style="text-align:center;color:#475569;padding:2rem;">Chargement...</td></tr>';
+    try {
+        const snap = await resultsCol.orderBy('savedAt','desc').get();
+        cachedResults = snap.docs.map(d=>d.data());
+        // Build user map
+        const userMap = {};
+        cachedResults.forEach(r => {
+            const key = r.firstName+'_'+r.lastName;
+            if (!userMap[key]) userMap[key] = {firstName:r.firstName, lastName:r.lastName, attempts:0, scores:[], aiHelps:0, lastDate:r.date};
+            userMap[key].attempts++;
+            userMap[key].scores.push(Math.round((r.score/r.total)*100));
+            userMap[key].aiHelps += r.aiHelpCount||0;
+            if (r.date > userMap[key].lastDate) userMap[key].lastDate = r.date;
+        });
+        cachedUsers = Object.values(userMap);
+        renderUsersTable(cachedUsers);
+    } catch(err) { showToast('error','Erreur users: '+err.message); }
+}
+function renderUsersTable(users) {
+    document.getElementById('usr-table-body').innerHTML = users.length ? users.map(u=>{
+        const avg = u.scores.length ? Math.round(u.scores.reduce((s,v)=>s+v,0)/u.scores.length) : 0;
+        const best = u.scores.length ? Math.max(...u.scores) : 0;
+        return `<tr>
+            <td class="bold">${u.firstName} ${u.lastName}</td>
+            <td>${u.attempts}</td>
+            <td>
+                <div class="inline-bar">
+                    <div class="inline-bar-track"><div class="inline-bar-fill ${avg>=70?'good':avg>=50?'mid':'bad'}" style="width:${avg}%"></div></div>
+                    <span style="color:#94a3b8;font-size:0.8rem;">${avg}%</span>
+                </div>
+            </td>
+            <td style="color:#4ade80;font-weight:600;">${best}%</td>
+            <td>${u.aiHelps>0?`<span class="badge badge-amber">🤖 ${u.aiHelps}</span>`:'<span style="color:#475569;">0</span>'}</td>
+            <td class="meta">${formatDate(u.lastDate)}</td>
+            <td>
+                <button class="ap-btn ap-btn-secondary ap-btn-sm" onclick="viewUserProgress('${u.firstName}','${u.lastName}')">🔍 Progression</button>
+                    <button class="ap-btn ap-btn-danger ap-btn-sm" onclick="deleteUserResults('${u.firstName}','${u.lastName}')">🗑 Effacer</button>
+            </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="7" style="text-align:center;color:#475569;padding:2rem;">Aucun utilisateur</td></tr>';
+}
+function filterUsers() {
+    const s = (document.getElementById('usr-search')?.value||'').toLowerCase();
+    renderUsersTable(cachedUsers.filter(u=>(u.firstName+' '+u.lastName).toLowerCase().includes(s)));
+}
+async function deleteUserResults(fn, ln) {
+    if (!confirm(`Effacer tous les résultats de ${fn} ${ln} ?`)) return;
+    const snap = await resultsCol.get();
+    const batch = db.batch();
+    snap.docs.forEach(doc => { const d=doc.data(); if(d.firstName===fn&&d.lastName===ln) batch.delete(doc.ref); });
+    await batch.commit();
+    showToast('success','Résultats supprimés.');
+    loadUsers();
+}
+function exportUsersCSV() {
+    const rows = [['Prénom','Nom','Tentatives','Score moyen','Meilleur score','Aides IA','Dernière activité']];
+    cachedUsers.forEach(u => {
+        const avg = u.scores.length ? Math.round(u.scores.reduce((s,v)=>s+v,0)/u.scores.length) : 0;
+        rows.push([u.firstName,u.lastName,u.attempts,avg+'%',Math.max(...u.scores,0)+'%',u.aiHelps,u.lastDate]);
+    });
+    downloadCSV(rows, 'utilisateurs.csv');
+}
+
+// ── RESULTS ───────────────────────────────────────────
+async function loadResults() {
+    document.getElementById('res-table-body').innerHTML='<tr><td colspan="6" style="text-align:center;color:#475569;padding:2rem;">Chargement...</td></tr>';
+    try {
+        const snap = await resultsCol.orderBy('savedAt','desc').get();
+        cachedResults = snap.docs.map(d=>d.data());
+        // Populate quiz filter
+        const quizTitles = [...new Set(cachedResults.map(r=>r.quizTitle))];
+        const sel = document.getElementById('res-filter-quiz');
+        sel.innerHTML = '<option value="">Tous les quiz</option>'+quizTitles.map(t=>`<option value="${t}">${t}</option>`).join('');
+        filterResults();
+    } catch(err) { showToast('error','Erreur résultats: '+err.message); }
+}
+function filterResults() {
+    const search = (document.getElementById('res-search')?.value||'').toLowerCase();
+    const quizF  = document.getElementById('res-filter-quiz')?.value||'';
+    const scoreF = document.getElementById('res-filter-score')?.value||'';
+    let filtered = cachedResults.filter(r => {
+        const name = (r.firstName+' '+r.lastName).toLowerCase();
+        const pct  = Math.round((r.score/r.total)*100);
+        const scoreOk = !scoreF || (scoreF==='high'&&pct>=80)||(scoreF==='mid'&&pct>=50&&pct<80)||(scoreF==='low'&&pct<50);
+        return name.includes(search) && (!quizF||r.quizTitle===quizF) && scoreOk;
+    });
+    document.getElementById('res-count').textContent = filtered.length+' résultat(s)';
+    document.getElementById('res-table-body').innerHTML = filtered.length ? filtered.map(r=>{
+        const pct = Math.round((r.score/r.total)*100);
+        const cls = pct>=70?'good':'partial';
+        return `<tr>
+            <td class="bold">${r.firstName} ${r.lastName}</td>
+            <td class="regular">${r.quizTitle}</td>
+            <td><div class="score-display"><span class="score-value ${cls}">${r.score}/${r.total}</span><span class="score-percent">(${pct}%)</span></div></td>
+            <td>${r.aiHelpCount>0?`<span class="badge badge-amber">🤖 ${r.aiHelpCount}</span>`:'<span style="color:#475569;">—</span>'}</td>
+            <td class="meta" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.reason||'—'}</td>
+            <td class="meta">${formatDate(r.date)}</td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:#475569;padding:2rem;">Aucun résultat</td></tr>';
+}
+function exportResultsCSV() {
+    const rows = [['Prénom','Nom','Quiz','Score','%','Aides IA','Raison','Date']];
+    cachedResults.forEach(r => {
+        rows.push([r.firstName,r.lastName,r.quizTitle,r.score+'/'+r.total,Math.round((r.score/r.total)*100)+'%',r.aiHelpCount||0,r.reason||'',r.date]);
+    });
+    downloadCSV(rows, 'resultats.csv');
+}
+
+// ── ANALYTICS ─────────────────────────────────────────
+async function loadAnalytics() {
+    try {
+        const snap = await resultsCol.get();
+        cachedResults = snap.docs.map(d=>d.data());
+        const results = cachedResults;
+        const total = results.length;
+        if (!total) { showToast('info','Aucune donnée analytique'); return; }
+
+        const avgScore = Math.round(results.reduce((s,r)=>s+Math.round((r.score/r.total)*100),0)/total);
+        const withAI   = results.filter(r=>r.aiHelpCount>0).length;
+        const perfect  = results.filter(r=>r.score===r.total).length;
+        const failed   = results.filter(r=>Math.round((r.score/r.total)*100)<50).length;
+
+        document.getElementById('ana-stats').innerHTML = `
+            <div class="ap-stat-card indigo"><div class="ap-stat-icon">📊</div><div class="ap-stat-label">Tentatives</div><div class="ap-stat-value">${total}</div></div>
+            <div class="ap-stat-card green"><div class="ap-stat-icon">🎯</div><div class="ap-stat-label">Score moyen</div><div class="ap-stat-value">${avgScore}%</div></div>
+            <div class="ap-stat-card amber"><div class="ap-stat-icon">🤖</div><div class="ap-stat-label">Avec IA</div><div class="ap-stat-value">${Math.round((withAI/total)*100)}%</div></div>
+            <div class="ap-stat-card rose"><div class="ap-stat-icon">❌</div><div class="ap-stat-label">Échecs &lt;50%</div><div class="ap-stat-value">${failed}</div></div>
+        `;
+
+        // Heatmap: success rate per quiz
+        const quizScores = {};
+        results.forEach(r => {
+            if (!quizScores[r.quizTitle]) quizScores[r.quizTitle]=[];
+            quizScores[r.quizTitle].push(Math.round((r.score/r.total)*100));
+        });
+        document.getElementById('ana-heatmap').innerHTML = Object.entries(quizScores).map(([t,arr])=>{
+            const avg = Math.round(arr.reduce((s,v)=>s+v,0)/arr.length);
+            const cls = avg>=70?'hm-high':avg>=50?'hm-mid':'hm-low';
+            return `<div class="heatmap-cell ${cls}"><div class="hm-label" title="${t}">${t}</div><div class="hm-val">${avg}%</div></div>`;
+        }).join('') || '<div style="color:#475569;">Aucune donnée</div>';
+
+        // Most failed questions across all quizzes
+        const qFails = {};
+        state.quizzes.forEach(quiz => {
+            (quiz.questions||[]).forEach(q => {
+                const attempts = results.filter(r=>r.quizTitle===quiz.title);
+                if (!attempts.length) return;
+                const fails = attempts.filter(r => {
+                    const ua = r.answers?.find?.(a=>a.questionId===q.id);
+                    return !ua;
+                }).length;
+                const failRate = Math.round((fails/attempts.length)*100);
+                if (failRate > 0) qFails[q.text.slice(0,40)] = failRate;
+            });
+        });
+        const sortedFails = Object.entries(qFails).sort((a,b)=>b[1]-a[1]).slice(0,6);
+        document.getElementById('ana-failed-q').innerHTML = sortedFails.length ? sortedFails.map(([txt,rate])=>`
+            <div class="ap-bar-row">
+                <div class="ap-bar-label" title="${txt}">${txt}</div>
+                <div class="ap-bar-track"><div class="ap-bar-fill rose" style="width:${rate}%"></div></div>
+                <div class="ap-bar-val">${rate}%</div>
+            </div>`).join('') : '<div style="color:#475569;font-size:0.85rem;">Données insuffisantes</div>';
+
+        // AI impact
+        const noAI = results.filter(r=>!r.aiHelpCount);
+        const withAIR = results.filter(r=>r.aiHelpCount>0);
+        const avgNoAI  = noAI.length  ? Math.round(noAI.reduce((s,r)=>s+Math.round((r.score/r.total)*100),0)/noAI.length) : 0;
+        const avgWithAI= withAIR.length? Math.round(withAIR.reduce((s,r)=>s+Math.round((r.score/r.total)*100),0)/withAIR.length) : 0;
+        document.getElementById('ana-ai-impact').innerHTML = `
+            <div style="text-align:center;padding:1.5rem;background:#1e293b;border-radius:0.75rem;">
+                <div style="font-size:3rem;font-weight:800;color:#4ade80;">${avgNoAI}%</div>
+                <div style="color:#64748b;margin-top:0.5rem;">Sans aide IA</div>
+                <div style="color:#94a3b8;font-size:0.8rem;">${noAI.length} tentatives</div>
+            </div>
+            <div style="text-align:center;padding:1.5rem;background:#1e293b;border-radius:0.75rem;">
+                <div style="font-size:3rem;font-weight:800;color:#fbbf24;">${avgWithAI}%</div>
+                <div style="color:#64748b;margin-top:0.5rem;">Avec aide IA</div>
+                <div style="color:#94a3b8;font-size:0.8rem;">${withAIR.length} tentatives (pénalité incluse)</div>
+            </div>`;
+    } catch(err) { showToast('error','Erreur analytics: '+err.message); }
+}
+
+// ── AI TOOLS ──────────────────────────────────────────
+let generatedQuestions = [];
+function initAITools() {
+    const msgs = document.getElementById('ai-admin-messages');
+    if (msgs && !msgs.children.length) addAdminAIMsg('assistant','Bonjour ! Je suis votre assistant admin. Je peux vous aider à générer des quiz, analyser vos données, ou répondre à vos questions sur la plateforme. 🚀');
+}
+
+async function aiGenerateQuestions() {
+    const topic = document.getElementById('ai-gen-topic').value.trim();
+    if (!topic) { showToast('error','Entrez un sujet'); return; }
+    const count = document.getElementById('ai-gen-count').value;
+    const diff  = document.getElementById('ai-gen-diff').value;
+    const btn = event.target;
+    btn.disabled=true; btn.textContent='Génération...';
+    document.getElementById('ai-gen-result').style.display='block';
+    document.getElementById('ai-gen-status').textContent='⏳ L\'IA génère vos questions...';
+    document.getElementById('ai-gen-questions-list').innerHTML='';
+    try {
+        const prompt = `Génère exactement ${count} questions QCM sur le sujet "${topic}" de niveau ${diff}.
+Réponds UNIQUEMENT avec du JSON valide, sans aucun texte avant ou après, dans ce format exact:
+[{"text":"Question?","answers":[{"id":1,"text":"Réponse A","isCorrect":false},{"id":2,"text":"Réponse B","isCorrect":true},{"id":3,"text":"Réponse C","isCorrect":false},{"id":4,"text":"Réponse D","isCorrect":false}]}]
+IMPORTANT: exactement 4 réponses, une seule isCorrect:true.`;
+        const res = await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:GROQ_MODEL,messages:[{role:'user',content:prompt}],temperature:0.7,max_tokens:2000})});
+        if (!res.ok) throw new Error('Erreur API '+res.status);
+        const data = await res.json();
+        let text = data.choices?.[0]?.message?.content||'';
+        text = text.replace(/```json|```/g,'').trim();
+        const start = text.indexOf('['); const end = text.lastIndexOf(']')+1;
+        if (start<0||end<=0) throw new Error('Réponse JSON invalide');
+        generatedQuestions = JSON.parse(text.slice(start,end));
+        generatedQuestions = generatedQuestions.map((q,i)=>({...q,id:Date.now()+i}));
+        document.getElementById('ai-gen-status').textContent='✅ '+generatedQuestions.length+' questions générées !';
+        document.getElementById('ai-gen-questions-list').innerHTML = generatedQuestions.map((q,i)=>`
+            <div style="background:#0b1120;border:1px solid #1f2d3d;border-radius:0.625rem;padding:1rem;margin-bottom:0.625rem;">
+                <div style="color:white;font-weight:600;font-size:0.875rem;margin-bottom:0.5rem;">Q${i+1}: ${q.text}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:0.375rem;">
+                    ${(q.answers||[]).map(a=>`<span style="padding:0.2rem 0.625rem;border-radius:9999px;font-size:0.75rem;${a.isCorrect?'background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3)':'background:#1e293b;color:#64748b;border:1px solid #334155'}">${a.isCorrect?'✓ ':''}${a.text}</span>`).join('')}
+                </div>
+            </div>`).join('');
+    } catch(err) {
+        document.getElementById('ai-gen-status').textContent='❌ Erreur: '+err.message;
+    } finally {
+        btn.disabled=false; btn.textContent='🚀 Générer les questions';
+    }
+}
+function addGeneratedToQuiz() {
+    if (!generatedQuestions.length) return;
+    const titles = state.quizzes.map(q=>q.title);
+    if (!titles.length) { showToast('error','Créez d\'abord un quiz !'); return; }
+    const choice = prompt('Dans quel quiz ajouter ?\n'+titles.map((t,i)=>i+1+'. '+t).join('\n')+'\n\nEntrez le numéro :');
+    const idx = parseInt(choice)-1;
+    if (isNaN(idx)||idx<0||idx>=state.quizzes.length) { showToast('error','Numéro invalide'); return; }
+    const quiz = state.quizzes[idx];
+    generatedQuestions.forEach(q => quiz.questions.push({...q, id:Date.now()+Math.random()}));
+    saveQuizToFirebase(quiz).then(()=>showToast('success',generatedQuestions.length+' questions ajoutées à '+quiz.title+' !')).catch(e=>showToast('error',e.message));
+}
+
+let adminAIMessages = [];
+function addAdminAIMsg(role, text) {
+    const c = document.getElementById('ai-admin-messages');
+    if (!c) return;
+    const d = document.createElement('div');
+    d.className = 'ai-msg '+role;
+    d.innerHTML = `<div class="ai-msg-bubble">${text}</div>`;
+    c.appendChild(d); c.scrollTop=c.scrollHeight;
+}
+async function aiAdminSend() {
+    const inp = document.getElementById('ai-admin-input');
+    const msg = inp.value.trim(); if (!msg) return;
+    addAdminAIMsg('user',msg); inp.value='';
+    adminAIMessages.push({role:'user',content:msg});
+    addAdminAIMsg('assistant','⏳...');
+    try {
+        const res = await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:GROQ_MODEL,messages:[{role:'system',content:'Tu es un assistant expert pour une plateforme de quiz éducatifs. Tu aides les administrateurs avec des conseils, analyses et suggestions. Réponds en français, de façon concise et pratique.'},...adminAIMessages],max_tokens:600})});
+        const c = document.getElementById('ai-admin-messages');
+        if (c.lastChild) c.removeChild(c.lastChild);
+        if (!res.ok) throw new Error('Erreur '+res.status);
+        const data=await res.json(); const reply=data.choices?.[0]?.message?.content||'Erreur.';
+        addAdminAIMsg('assistant',reply);
+        adminAIMessages.push({role:'assistant',content:reply});
+    } catch(err) {
+        const c=document.getElementById('ai-admin-messages');
+        if(c.lastChild)c.removeChild(c.lastChild);
+        addAdminAIMsg('assistant','❌ Erreur: '+err.message);
+    }
+}
+function aiAdminQuick(msg) { document.getElementById('ai-admin-input').value=msg; aiAdminSend(); }
+
+async function aiImproveQuestion() {
+    const q = document.getElementById('ai-improve-input').value.trim();
+    if (!q) { showToast('error','Entrez une question'); return; }
+    document.getElementById('ai-improve-output').textContent='⏳ Amélioration en cours...';
+    try {
+        const res = await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:GROQ_MODEL,messages:[{role:'user',content:`Améliore cette question de quiz pour la rendre plus claire, précise et pédagogique. Fournis aussi 4 réponses possibles avec la bonne réponse indiquée. Question: "${q}". Réponds en français.`}],max_tokens:500})});
+        if (!res.ok) throw new Error('Erreur '+res.status);
+        const data=await res.json();
+        document.getElementById('ai-improve-output').textContent=data.choices?.[0]?.message?.content||'Erreur.';
+    } catch(err) { document.getElementById('ai-improve-output').textContent='❌ '+err.message; }
+}
+
+// ── MODERATION ────────────────────────────────────────
+async function loadModeration() {
+    try {
+        const snap = await resultsCol.get();
+        cachedResults = snap.docs.map(d=>d.data());
+        const total = cachedResults.length;
+        const suspicious = cachedResults.filter(r=>r.score===r.total && r.aiHelpCount>0);
+        const aiAbuse = cachedResults.filter(r=>r.aiHelpCount>=3);
+
+        document.getElementById('mod-stats').innerHTML = `
+            <div class="ap-stat-card amber"><div class="ap-stat-icon">⚠️</div><div class="ap-stat-label">Scores suspects</div><div class="ap-stat-value">${suspicious.length}</div><div class="ap-stat-sub">parfait + IA</div></div>
+            <div class="ap-stat-card rose"><div class="ap-stat-icon">🤖</div><div class="ap-stat-label">Abus IA</div><div class="ap-stat-value">${aiAbuse.length}</div><div class="ap-stat-sub">≥ 3 aides</div></div>
+            <div class="ap-stat-card green"><div class="ap-stat-icon">✅</div><div class="ap-stat-label">Propres</div><div class="ap-stat-value">${total-suspicious.length-aiAbuse.length}</div><div class="ap-stat-sub">aucun problème</div></div>
+        `;
+        document.getElementById('mod-suspicious').innerHTML = suspicious.length ? suspicious.map(r=>`
+            <div class="mod-flag">
+                <div class="mod-flag-icon">🚨</div>
+                <div class="mod-flag-content">
+                    <div class="mod-flag-title">${r.firstName} ${r.lastName}</div>
+                    <div class="mod-flag-desc">Score parfait ${r.score}/${r.total} (100%) avec ${r.aiHelpCount} aide(s) IA — ${r.quizTitle} — ${formatDate(r.date)}</div>
+                </div>
+                <div class="mod-flag-actions">
+                    <span class="badge badge-red">Suspect</span>
+                </div>
+            </div>`).join('') : '<div style="color:#4ade80;padding:1rem;font-size:0.875rem;">✅ Aucun score suspect détecté</div>';
+
+        document.getElementById('mod-ai-abuse').innerHTML = aiAbuse.length ? aiAbuse.map(r=>`
+            <div class="mod-flag">
+                <div class="mod-flag-icon">🤖</div>
+                <div class="mod-flag-content">
+                    <div class="mod-flag-title">${r.firstName} ${r.lastName}</div>
+                    <div class="mod-flag-desc">${r.aiHelpCount} aides IA utilisées sur "${r.quizTitle}" — ${formatDate(r.date)}</div>
+                </div>
+                <div class="mod-flag-actions">
+                    <span class="badge badge-amber">Abus IA</span>
+                </div>
+            </div>`).join('') : '<div style="color:#4ade80;padding:1rem;font-size:0.875rem;">✅ Aucun abus IA détecté</div>';
+    } catch(err) { showToast('error','Erreur modération: '+err.message); }
+}
+
+// ── SETTINGS HELPERS ──────────────────────────────────
+async function clearAllResults() {
+    try {
+        const snap = await resultsCol.get();
+        const batch = db.batch();
+        snap.docs.forEach(d=>batch.delete(d.ref));
+        await batch.commit();
+        cachedResults=[];
+        showToast('success','Tous les résultats ont été effacés.');
+    } catch(err) { showToast('error','Erreur: '+err.message); }
+}
+
+// ── UTILS ─────────────────────────────────────────────
+function setText(id, val) { const el=document.getElementById(id); if(el) el.textContent=val; }
+function formatDate(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+    catch { return d; }
+}
+function downloadCSV(rows, filename) {
+    const csv = rows.map(r=>r.map(v=>'"'+(String(v||'').replace(/"/g,'""'))+'"').join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════
+// NOTIFICATIONS — PUSH + IN-APP
+// ═══════════════════════════════════════════════════════
+
+async function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+    }
+}
+
+function sendPushNotification(title, body) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' });
+    }
+}
+
+async function sendAdminNotification(type, message, icon) {
+    try {
+        await notificationsCol.add({
+            type, message, icon: icon || '🔔',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            read: false
+        });
+    } catch(e) { console.warn('notif write failed:', e); }
+}
+
+let notifUnsubscribe = null;
+function startAdminNotificationListener() {
+    if (notifUnsubscribe) notifUnsubscribe();
+    // Single-field orderBy — Firestore auto-indexes single fields, but may
+    // take a moment on first use. Error handler prevents crash if not ready.
+    notifUnsubscribe = notificationsCol
+        .orderBy('createdAt', 'desc').limit(50)
+        .onSnapshot(snap => {
+            const notifs = snap.docs.map(d => ({id:d.id, ...d.data()}));
+            renderNotifPanel(notifs);
+            const unread = notifs.filter(n => !n.read).length;
+            const badge = document.getElementById('notif-badge');
+            if (badge) {
+                badge.textContent = unread;
+                badge.classList.toggle('hidden', unread === 0);
+            }
+            snap.docChanges().forEach(c => {
+                if (c.type === 'added') {
+                    const d = c.doc.data();
+                    sendPushNotification('QuizMaster Admin', d.message);
+                }
+            });
+        }, function(err){ console.warn('Notif listener:', err.message); });
+}
+
+function renderNotifPanel(notifs) {
+    const list = document.getElementById('notif-list');
+    if (!list) return;
+    if (!notifs.length) {
+        list.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#475569;font-size:0.85rem;">Aucune notification</div>';
+        return;
+    }
+    list.innerHTML = notifs.map(n => `
+        <div style="padding:0.875rem 1.25rem;border-bottom:1px solid #1a2332;display:flex;gap:0.75rem;align-items:flex-start;${!n.read?'background:rgba(99,102,241,0.06)':''}">
+            <span style="font-size:1.1rem;flex-shrink:0;">${n.icon||'🔔'}</span>
+            <div style="flex:1;">
+                <div style="font-size:0.8rem;color:${!n.read?'#e2e8f0':'#94a3b8'};">${n.message}</div>
+                <div style="font-size:0.7rem;color:#475569;margin-top:0.25rem;">${n.createdAt && n.createdAt.toDate ? formatDate(n.createdAt.toDate().toISOString()) : ''}</div>
+            </div>
+            ${!n.read ? '<button onclick="markNotifRead(\''+n.id+'\')" style="background:none;border:none;color:#4f46e5;cursor:pointer;font-size:0.7rem;flex-shrink:0;">✓</button>' : ''}
+        </div>`).join('');
+}
+
+async function markNotifRead(id) {
+    await notificationsCol.doc(id).update({read: true});
+}
+
+async function clearNotifications() {
+    const snap = await notificationsCol.limit(50).get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    const list = document.getElementById('notif-list');
+    if (list) list.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#475569;font-size:0.85rem;">Effacées</div>';
+}
+
+let notifPanelOpen = false;
+function toggleNotifPanel() {
+    notifPanelOpen = !notifPanelOpen;
+    const panel = document.getElementById('notif-panel');
+    if (panel) panel.classList.toggle('hidden', !notifPanelOpen);
+}
+document.addEventListener('click', function(e) {
+    const bell = document.getElementById('notif-bell');
+    const panel = document.getElementById('notif-panel');
+    if (bell && panel && !bell.parentElement.contains(e.target)) {
+        notifPanelOpen = false;
+        panel.classList.add('hidden');
+    }
+});
+
+// ═══════════════════════════════════════════════════════
+// ANNOUNCEMENTS
+// ═══════════════════════════════════════════════════════
+
+function listenForAnnouncements() {
+    // Simple single-field query — no composite index needed in Firestore
+    announcementsCol
+        .where('active', '==', true)
+        .limit(5)
+        .onSnapshot(function(snap) {
+            var banner = document.getElementById('announcement-banner');
+            if (!banner) return;
+            if (snap.empty) { banner.classList.add('hidden'); return; }
+            // Sort client-side by createdAt (no composite index needed)
+            var docs = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); })
+                .filter(function(d){ return d.createdAt; })
+                .sort(function(a,b){ return (b.createdAt.seconds||0)-(a.createdAt.seconds||0); });
+            var d = docs.length ? docs[0] : snap.docs[0].data();
+            var iconEl = document.getElementById('announcement-icon');
+            var textEl = document.getElementById('announcement-text');
+            if (iconEl) iconEl.textContent = d.icon || '📢';
+            if (textEl) textEl.textContent = d.text || '';
+            banner.style.background = d.color || 'linear-gradient(135deg,#f59e0b,#f97316)';
+            banner.style.color = d.textColor || 'white';
+            banner.classList.remove('hidden');
+        }, function(err) {
+            console.warn('Announcements listener:', err.message);
+        });
+}
+
+async function saveAnnouncement() {
+    const textEl = document.getElementById('ann-text');
+    const text = textEl ? textEl.value.trim() : '';
+    if (!text) { showToast('error', 'Entrez un texte d\'annonce'); return; }
+    const icon  = (document.getElementById('ann-icon')  || {value:'📢'}).value || '📢';
+    const color = (document.getElementById('ann-color') || {value:'warning'}).value || 'warning';
+    const colorMap = {
+        warning: 'linear-gradient(135deg,#f59e0b,#f97316)',
+        danger:  'linear-gradient(135deg,#ef4444,#dc2626)',
+        info:    'linear-gradient(135deg,#3b82f6,#6366f1)',
+        success: 'linear-gradient(135deg,#22c55e,#16a34a)',
+        dark:    'linear-gradient(135deg,#1e293b,#0f172a)',
+    };
+    const old = await announcementsCol.where('active','==',true).get();
+    const batch = db.batch();
+    old.docs.forEach(d => batch.update(d.ref, {active:false}));
+    await batch.commit();
+    await announcementsCol.add({
+        text, icon, color: colorMap[color]||colorMap.warning,
+        textColor: color==='dark' ? '#e2e8f0' : 'white',
+        active: true,
+        createdBy: state.currentAdmin || 'Admin',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await sendAdminNotification('announcement', '📢 Annonce publiée: ' + text.slice(0,60), '📢');
+    showToast('success', 'Annonce publiée pour tous les utilisateurs !');
+    if (textEl) textEl.value = '';
+}
+
+async function clearAnnouncement() {
+    const old = await announcementsCol.where('active','==',true).get();
+    const batch = db.batch();
+    old.docs.forEach(d => batch.update(d.ref, {active:false}));
+    await batch.commit();
+    showToast('info', 'Annonce retirée.');
+    const banner = document.getElementById('announcement-banner');
+    if (banner) banner.classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════════
+// ANSWER REVIEW — users see their full quiz breakdown
+// ═══════════════════════════════════════════════════════
+
+function showAnswerReview() {
+    const result = state.lastResult;
+    if (!result || !result.breakdown) { showQuizList(); return; }
+    hideAllViews();
+    document.getElementById('answer-review-view').classList.remove('hidden');
+    const pct = Math.round((result.score/result.total)*100);
+    document.getElementById('review-subtitle').textContent =
+        result.quizTitle + ' — ' + result.score + '/' + result.total + ' correctes (' + pct + '%)';
+
+    document.getElementById('review-questions-list').innerHTML =
+        result.breakdown.map(function(b, i) {
+            var statusIcon  = b.isCorrect ? '✅' : '❌';
+            var statusColor = b.isCorrect ? '#22c55e' : '#ef4444';
+            return '<div style="background:white;border-radius:1.25rem;padding:1.75rem;margin-bottom:1.25rem;box-shadow:0 4px 20px rgba(0,0,0,0.06);border-left:4px solid '+statusColor+';">'
+                + '<div style="display:flex;gap:0.75rem;align-items:flex-start;margin-bottom:1.25rem;">'
+                + '<span style="font-size:1.5rem;">'+statusIcon+'</span>'
+                + '<div><div style="font-size:0.7rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Question '+(i+1)+'</div>'
+                + '<div style="font-size:1.1rem;font-weight:600;color:#1e293b;margin-top:0.25rem;">'+b.questionText+'</div></div></div>'
+                + '<div style="display:flex;flex-direction:column;gap:0.5rem;">'
+                + (b.answers||[]).map(function(a) {
+                    var wasChosen = (b.givenIds||[]).includes(a.id);
+                    var isRight   = a.isCorrect;
+                    var bg='#f8fafc', border='#e2e8f0', color='#334155', prefix='';
+                    if (isRight && wasChosen)  { bg='rgba(34,197,94,0.12)'; border='#22c55e'; color='#166534'; prefix='✅ '; }
+                    else if (isRight)          { bg='rgba(34,197,94,0.07)'; border='#86efac'; color='#166534'; prefix='✓ '; }
+                    else if (wasChosen)        { bg='rgba(239,68,68,0.1)';  border='#ef4444'; color='#991b1b'; prefix='✗ '; }
+                    return '<div style="padding:0.75rem 1rem;border-radius:0.75rem;border:2px solid '+border+';background:'+bg+';color:'+color+';font-size:0.9rem;font-weight:'+(isRight||wasChosen?'600':'400')+';">'+prefix+a.text+(isRight?' <span style="font-size:0.75rem;opacity:0.7;">(bonne réponse)</span>':'')+'</div>';
+                }).join('')
+                + '</div></div>';
+        }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// ADMIN: DETAILED USER PROGRESS VIEW
+// ═══════════════════════════════════════════════════════
+
+async function viewUserProgress(firstName, lastName) {
+    // Simple where queries without orderBy to avoid composite index requirement
+    const snap = await resultsCol
+        .where('firstName','==',firstName)
+        .where('lastName','==',lastName)
+        .get();
+    const attempts = snap.docs.map(d=>d.data())
+        .sort((a,b) => (b.savedAt?.seconds||0) - (a.savedAt?.seconds||0));
+    if (!attempts.length) { showToast('info','Aucune tentative pour cet utilisateur'); return; }
+
+    var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;padding:1rem;" id="progress-modal-overlay" onclick="if(event.target.id===\'progress-modal-overlay\')closeProgressModal()">'
+        + '<div style="background:#111827;border:1px solid #1f2d3d;border-radius:1rem;max-width:760px;width:100%;max-height:90vh;overflow-y:auto;padding:2rem;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">'
+        + '<div><div style="color:white;font-size:1.25rem;font-weight:700;">👤 '+firstName+' '+lastName+'</div>'
+        + '<div style="color:#64748b;font-size:0.85rem;">'+attempts.length+' tentative(s)</div></div>'
+        + '<button onclick="closeProgressModal()" style="background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:0.5rem 1rem;border-radius:0.5rem;cursor:pointer;">✕ Fermer</button></div>';
+
+    attempts.forEach(function(att) {
+        var pct = Math.round((att.score/att.total)*100);
+        var badge = pct>=70 ? '<span style="color:#4ade80;">✅ Réussi</span>' : '<span style="color:#f87171;">❌ Échoué</span>';
+        html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:0.875rem;padding:1.25rem;margin-bottom:1rem;">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.875rem;">'
+            + '<div><div style="color:white;font-weight:700;">'+att.quizTitle+'</div>'
+            + '<div style="color:#64748b;font-size:0.8rem;">'+formatDate(att.date)+(att.timeSpent?' · '+Math.floor(att.timeSpent/60)+'m'+(att.timeSpent%60)+'s':'')+'</div></div>'
+            + '<div style="text-align:right;">'+badge+'<div style="color:white;font-weight:800;font-size:1.5rem;">'+pct+'%</div><div style="color:#64748b;font-size:0.8rem;">'+att.score+'/'+att.total+'</div></div></div>';
+        if (att.breakdown && att.breakdown.length) {
+            html += '<div style="display:flex;flex-direction:column;gap:0.375rem;">';
+            att.breakdown.forEach(function(b, qi) {
+                var icon = b.isCorrect ? '✅' : '❌';
+                var givenText   = (b.answers||[]).filter(function(a){return (b.givenIds||[]).includes(a.id);}).map(function(a){return a.text;}).join(', ') || '—';
+                var correctText = (b.answers||[]).filter(function(a){return a.isCorrect;}).map(function(a){return a.text;}).join(', ') || '?';
+                html += '<div style="padding:0.625rem 0.875rem;border-radius:0.5rem;background:#0b1120;border:1px solid '+(b.isCorrect?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.2)')+';display:flex;gap:0.5rem;align-items:flex-start;">'
+                    + '<span>'+icon+'</span>'
+                    + '<div><div style="color:#e2e8f0;font-size:0.8rem;font-weight:600;">Q'+(qi+1)+': '+b.questionText+'</div>'
+                    + '<div style="font-size:0.72rem;margin-top:0.25rem;color:#64748b;">Réponse: <span style="color:'+(b.isCorrect?'#4ade80':'#f87171')+';">'+givenText+'</span>'
+                    + (!b.isCorrect ? ' · Correcte: <span style="color:#4ade80;">'+correctText+'</span>' : '')+'</div></div></div>';
+            });
+            html += '</div>';
+        } else {
+            html += '<div style="color:#475569;font-size:0.8rem;padding:0.5rem 0;">Détail par question non disponible (ancienne tentative)</div>';
+        }
+        html += '</div>';
+    });
+    html += '</div></div>';
+    var existing = document.getElementById('progress-modal-overlay');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeProgressModal() {
+    var m = document.getElementById('progress-modal-overlay');
+    if (m) m.remove();
+}
+
+// ═══════════════════════════════════════════════════════
+// GOOGLE LOGIN (placeholder)
+// ═══════════════════════════════════════════════════════
+
+function googleLogin() {
+    // ════════════════════════════════════════════════════════
+    // PLACEHOLDER — To activate Google Login:
+    // 1. Firebase Console → Authentication → Sign-in method → Enable "Google"
+    // 2. Add this SDK tag in <head>:
+    //    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"><\/script>
+    // 3. Replace this function body with:
+    //
+    //    const provider = new firebase.auth.GoogleAuthProvider();
+    //    firebase.auth().signInWithPopup(provider).then(result => {
+    //        const user = result.user;
+    //        state.userData.firstName = user.displayName.split(' ')[0] || '';
+    //        state.userData.lastName  = user.displayName.split(' ').slice(1).join(' ') || '';
+    //        state.userData.reason    = 'Connexion Google';
+    //        showQuizList();
+    //    }).catch(err => showToast('error', err.message));
+    // ════════════════════════════════════════════════════════
+    showToast('info', '🔧 Google Login — voir instructions dans le code (cherchez "PLACEHOLDER — To activate Google Login")');
+}
+
+// ═══════════════════════════════════════════════════════
+// LANGUAGE / I18N
+// ═══════════════════════════════════════════════════════
+
+
+// ═══════════════════════════════════════════════════════
+// OFFLINE FALLBACK
+// ═══════════════════════════════════════════════════════
+
+var offlineBannerShown = false;
+function showFallbackBanner(msg) {
+    if (offlineBannerShown) return;
+    offlineBannerShown = true;
+    var bar = document.createElement('div');
+    bar.id = 'offline-banner';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;padding:0.875rem 1.5rem;text-align:center;font-weight:600;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:0.75rem;';
+    bar.innerHTML = '<span>⚠️</span><span>' + msg + '</span><button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:0.2rem 0.6rem;border-radius:9999px;cursor:pointer;margin-left:0.5rem;font-size:0.8rem;">✕</button>';
+    document.body.prepend(bar);
+    document.body.style.paddingTop = '52px';
+}
+
+function loadLocalFallback() {
+    // If Firebase is totally unreachable, show a helpful message instead of a blank screen
+    var loadingEl = document.getElementById('loading-overlay');
+    if (loadingEl) loadingEl.classList.add('hidden');
+    var userForm = document.getElementById('user-form-view');
+    if (userForm) userForm.classList.remove('hidden');
+    showToast('error', '🔌 Mode hors-ligne — Les quiz ne peuvent pas être chargés sans connexion Firebase.');
+}
+
+// ═══════════════════════════════════════════════════════
+// LANGUAGE / I18N — FULL REBUILD
+// ═══════════════════════════════════════════════════════
+
+var LANG = {
+    fr: {
+        subtitle: 'Testez vos connaissances',
+        firstName: 'Prénom',
+        lastName: 'Nom de famille',
+        reason: 'Raison de passer le quiz',
+        continuer: 'Continuer',
+        adminAccess: 'Accès administrateur',
+        chooseQuiz: 'Choisissez un quiz',
+        greeting: 'Bonjour',
+        noQuiz: 'Aucun quiz disponible pour le moment.',
+        start: 'Commencer →',
+        question: 'Question',
+        of: 'sur',
+        prev: '← Précédent',
+        next: 'Question suivante →',
+        finish: '✔ Terminer',
+        quit: '✖ Quitter',
+        congrats: 'Félicitations !',
+        tryAgain: 'Bon essai !',
+        seeAnswers: '🔍 Voir mes réponses',
+        backToQuizzes: 'Retour aux quiz',
+        revisions: '📚 Révisions avec IA',
+        correct: 'Correctes',
+        wrong: 'Incorrectes',
+        total: 'Total',
+        difficulty_easy: '🟢 Facile',
+        difficulty_medium: '🟡 Moyen',
+        difficulty_hard: '🔴 Difficile',
+        questions: 'question',
+        questions_pl: 'questions',
+    },
+    en: {
+        subtitle: 'Test your knowledge',
+        firstName: 'First name',
+        lastName: 'Last name',
+        reason: 'Reason for taking the quiz',
+        continuer: 'Continue',
+        adminAccess: 'Admin access',
+        chooseQuiz: 'Choose a quiz',
+        greeting: 'Hello',
+        noQuiz: 'No quizzes available yet.',
+        start: 'Start →',
+        question: 'Question',
+        of: 'of',
+        prev: '← Previous',
+        next: 'Next question →',
+        finish: '✔ Finish',
+        quit: '✖ Quit',
+        congrats: 'Congratulations!',
+        tryAgain: 'Good try!',
+        seeAnswers: '🔍 View my answers',
+        backToQuizzes: 'Back to quizzes',
+        revisions: '📚 AI Revisions',
+        correct: 'Correct',
+        wrong: 'Wrong',
+        total: 'Total',
+        difficulty_easy: '🟢 Easy',
+        difficulty_medium: '🟡 Medium',
+        difficulty_hard: '🔴 Hard',
+        questions: 'question',
+        questions_pl: 'questions',
+    },
+    es: {
+        subtitle: 'Pon a prueba tus conocimientos',
+        firstName: 'Nombre',
+        lastName: 'Apellido',
+        reason: 'Motivo para hacer el quiz',
+        continuer: 'Continuar',
+        adminAccess: 'Acceso admin',
+        chooseQuiz: 'Elige un quiz',
+        greeting: 'Hola',
+        noQuiz: 'No hay cuestionarios disponibles.',
+        start: 'Empezar →',
+        question: 'Pregunta',
+        of: 'de',
+        prev: '← Anterior',
+        next: 'Siguiente →',
+        finish: '✔ Terminar',
+        quit: '✖ Salir',
+        congrats: '¡Felicidades!',
+        tryAgain: '¡Buen intento!',
+        seeAnswers: '🔍 Ver respuestas',
+        backToQuizzes: 'Volver',
+        revisions: '📚 Revisiones IA',
+        correct: 'Correctas',
+        wrong: 'Incorrectas',
+        total: 'Total',
+        difficulty_easy: '🟢 Fácil',
+        difficulty_medium: '🟡 Medio',
+        difficulty_hard: '🔴 Difícil',
+        questions: 'pregunta',
+        questions_pl: 'preguntas',
+    },
+    de: {
+        subtitle: 'Teste dein Wissen',
+        firstName: 'Vorname',
+        lastName: 'Nachname',
+        reason: 'Grund für das Quiz',
+        continuer: 'Weiter',
+        adminAccess: 'Admin-Zugang',
+        chooseQuiz: 'Quiz auswählen',
+        greeting: 'Hallo',
+        noQuiz: 'Noch keine Quizze verfügbar.',
+        start: 'Starten →',
+        question: 'Frage',
+        of: 'von',
+        prev: '← Zurück',
+        next: 'Nächste →',
+        finish: '✔ Beenden',
+        quit: '✖ Abbrechen',
+        congrats: 'Glückwunsch!',
+        tryAgain: 'Guter Versuch!',
+        seeAnswers: '🔍 Antworten ansehen',
+        backToQuizzes: 'Zurück',
+        revisions: '📚 KI-Wiederholung',
+        correct: 'Richtig',
+        wrong: 'Falsch',
+        total: 'Gesamt',
+        difficulty_easy: '🟢 Leicht',
+        difficulty_medium: '🟡 Mittel',
+        difficulty_hard: '🔴 Schwer',
+        questions: 'Frage',
+        questions_pl: 'Fragen',
+    },
+    pt: {
+        subtitle: 'Teste seus conhecimentos',
+        firstName: 'Nome',
+        lastName: 'Sobrenome',
+        reason: 'Motivo para fazer o quiz',
+        continuer: 'Continuar',
+        adminAccess: 'Acesso admin',
+        chooseQuiz: 'Escolha um quiz',
+        greeting: 'Olá',
+        noQuiz: 'Nenhum quiz disponível.',
+        start: 'Começar →',
+        question: 'Pergunta',
+        of: 'de',
+        prev: '← Anterior',
+        next: 'Próxima →',
+        finish: '✔ Terminar',
+        quit: '✖ Sair',
+        congrats: 'Parabéns!',
+        tryAgain: 'Boa tentativa!',
+        seeAnswers: '🔍 Ver respostas',
+        backToQuizzes: 'Voltar',
+        revisions: '📚 Revisões IA',
+        correct: 'Corretas',
+        wrong: 'Incorretas',
+        total: 'Total',
+        difficulty_easy: '🟢 Fácil',
+        difficulty_medium: '🟡 Médio',
+        difficulty_hard: '🔴 Difícil',
+        questions: 'pergunta',
+        questions_pl: 'perguntas',
+    }
+};
+
+var currentLang = localStorage.getItem('qm_lang') || 'fr';
+
+function t(key) {
+    var dict = LANG[currentLang] || LANG['fr'];
+    return dict[key] || LANG['fr'][key] || key;
+}
+
+function setLanguage(lang) {
+    if (!LANG[lang]) return;
+    currentLang = lang;
+    localStorage.setItem('qm_lang', lang);
+    applyLanguage();
+    showToast('success', '🌐 ' + (lang === 'fr' ? 'Langue : Français' : lang === 'en' ? 'Language: English' : lang === 'es' ? 'Idioma: Español' : lang === 'de' ? 'Sprache: Deutsch' : 'Idioma: Português'));
+}
+
+function applyLanguage() {
+    var map = {
+        'lang-subtitle':        t('subtitle'),
+        'lang-firstName':       t('firstName'),
+        'lang-lastName':        t('lastName'),
+        'lang-reason':          t('reason'),
+        'lang-continuer':       t('continuer'),
+        'lang-adminAccess':     t('adminAccess'),
+        'lang-chooseQuiz':      t('chooseQuiz'),
+        'lang-revisions-btn':   t('revisions'),
+        'lang-seeAnswers':      t('seeAnswers'),
+        'lang-backToQuizzes':   t('backToQuizzes'),
+        'lang-prev-btn':        t('prev'),
+        'lang-continuer':       t('continuer'),
+        'lang-adminAccess':     t('adminAccess'),
+    };
+    Object.keys(map).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = map[id];
+    });
+    // Update form labels by data-lang-key attribute
+    document.querySelectorAll('[data-lang-key]').forEach(function(el) {
+        var key = el.getAttribute('data-lang-key');
+        if (t(key)) el.textContent = t(key);
+    });
+    // Update input placeholders
+    document.querySelectorAll('[data-lang-placeholder]').forEach(function(el) {
+        var key = el.getAttribute('data-lang-placeholder');
+        if (t(key)) el.placeholder = t(key);
+    });
+    // Update lang buttons
+    document.querySelectorAll('.lang-btn').forEach(function(b) {
+        var active = b.dataset.lang === currentLang;
+        b.style.background  = active ? '#4f46e5' : '#1e293b';
+        b.style.color       = active ? 'white'   : '#94a3b8';
+        b.style.borderColor = active ? '#4f46e5' : '#334155';
+    });
+    // Re-render quiz list if visible (updates difficulty labels etc.)
+    var ql = document.getElementById('quiz-list-view');
+    if (ql && !ql.classList.contains('hidden')) renderQuizList();
+}
+
+// Apply language on load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(applyLanguage, 100);
+});
+
+
+// ═══════════════════════════════════════════════════════
+// QUIZ TIMER — per-question countdown
+// ═══════════════════════════════════════════════════════
+
+var quizTimerInterval = null;
+var questionStartTime = null;
+
+function startQuestionTimer() {
+    questionStartTime = Date.now();
+    clearInterval(quizTimerInterval);
+    var timerEl = document.getElementById('quiz-timer');
+    if (!timerEl) return;
+    var elapsed = 0;
+    timerEl.textContent = '0s';
+    quizTimerInterval = setInterval(function() {
+        elapsed = Math.round((Date.now() - questionStartTime) / 1000);
+        var m = Math.floor(elapsed/60), s = elapsed%60;
+        timerEl.textContent = m>0 ? m+'m '+s+'s' : s+'s';
+    }, 1000);
+}
+
+function stopQuestionTimer() {
+    clearInterval(quizTimerInterval);
+    return questionStartTime ? Math.round((Date.now()-questionStartTime)/1000) : 0;
+}
+
+// ═══════════════════════════════════════════════════════
+// ADMIN: EXPORT QUIZ AS JSON
+// ═══════════════════════════════════════════════════════
+
+function exportQuizJSON(fid) {
+    var quiz = state.quizzes.find(function(q){ return q.firestoreId===fid; });
+    if (!quiz) return;
+    var data = JSON.parse(JSON.stringify(quiz));
+    delete data.firestoreId;
+    var blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    var url  = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = (quiz.title||'quiz').replace(/\s+/g,'_')+'.json';
+    a.click(); URL.revokeObjectURL(url);
+    showToast('success', '📥 Quiz exporté en JSON !');
+}
+
+// ═══════════════════════════════════════════════════════
+// ADMIN: QUIZ SEARCH SHORTCUT (ctrl+k or cmd+k)
+// ═══════════════════════════════════════════════════════
+
+document.addEventListener('keydown', function(e) {
+    // Ctrl+K / Cmd+K → focus topbar search
+    if ((e.ctrlKey||e.metaKey) && e.key === 'k') {
+        var adminOn = document.getElementById('admin-view') && !document.getElementById('admin-view').classList.contains('hidden');
+        if (adminOn) {
+            e.preventDefault();
+            var s = document.querySelector('.ap-topbar-search input');
+            if (s) { s.focus(); s.select(); }
+        }
+    }
+    // Esc → close any open modal
+    if (e.key === 'Escape') {
+        var qm = document.getElementById('question-modal');
+        if (qm && !qm.classList.contains('hidden')) closeQuestionModal();
+        var pm = document.getElementById('progress-modal-overlay');
+        if (pm) closeProgressModal();
+        if (notifPanelOpen) { notifPanelOpen=false; var np=document.getElementById('notif-panel'); if(np)np.classList.add('hidden'); }
+    }
+    // In quiz: N = next, P = prev
+    var quizOn = document.getElementById('quiz-view') && !document.getElementById('quiz-view').classList.contains('hidden');
+    if (quizOn) {
+        if (e.key === 'ArrowRight') { var nb=document.getElementById('next-btn'); if(nb&&!nb.disabled)nextQuestion(); }
+        if (e.key === 'ArrowLeft')  prevQuestion();
+    }
+});
+
+// ═══════════════════════════════════════════════════════
+// USER: QUIZ STREAK & HISTORY (localStorage-based)
+// ═══════════════════════════════════════════════════════
+
+function getUserHistory() {
+    try { return JSON.parse(localStorage.getItem('qm_history')||'[]'); }
+    catch { return []; }
+}
+
+function saveToUserHistory(result) {
+    var hist = getUserHistory();
+    hist.unshift({
+        quiz: result.quizTitle,
+        score: result.score,
+        total: result.total,
+        pct: Math.round((result.score/result.total)*100),
+        date: result.date
+    });
+    if (hist.length > 50) hist = hist.slice(0,50);
+    localStorage.setItem('qm_history', JSON.stringify(hist));
+}
+
+function renderUserHistory() {
+    var hist = getUserHistory();
+    var el = document.getElementById('user-history-list');
+    if (!el) return;
+    if (!hist.length) {
+        el.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:1.5rem;font-size:0.875rem;">Aucun quiz complété pour l\'instant.</div>';
+        return;
+    }
+    el.innerHTML = hist.slice(0,10).map(function(h) {
+        var cls = h.pct>=70?'#4ade80':h.pct>=50?'#fbbf24':'#f87171';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 0;border-bottom:1px solid #e2e8f0;gap:0.5rem;">'
+            + '<div style="flex:1;min-width:0;"><div style="font-weight:600;color:#1e293b;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+h.quiz+'</div>'
+            + '<div style="font-size:0.75rem;color:#94a3b8;">'+new Date(h.date).toLocaleDateString()+'</div></div>'
+            + '<div style="font-weight:800;font-size:1rem;color:'+cls+';">'+h.pct+'%</div></div>';
+    }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// ADMIN: LIVE STATS REFRESH
+// ═══════════════════════════════════════════════════════
+
+var dashboardAutoRefresh = null;
+
+function startDashboardAutoRefresh() {
+    clearInterval(dashboardAutoRefresh);
+    dashboardAutoRefresh = setInterval(function() {
+        var adminOn = document.getElementById('admin-view') && !document.getElementById('admin-view').classList.contains('hidden');
+        var dashOn  = document.getElementById('ap-dashboard') && document.getElementById('ap-dashboard').classList.contains('active');
+        if (adminOn && dashOn) loadDashboard();
+    }, 60000); // refresh every 60s
+}
+
+
+// ── REVISIONS IA ──────────────────────────────────
+let revTopic='', revMsgs=[];
+const topicDescs={mathematiques:'Algebre, geometrie, calcul',francais:'Grammaire, orthographe, litterature',histoire:'Evenements historiques',geographie:'Pays, capitales, reliefs',sciences:'Physique, chimie, biologie',anglais:'Vocabulaire, grammaire',programmation:'Python, JavaScript, HTML'};
+const topicNames={mathematiques:'Mathematiques',francais:'Francais',histoire:'Histoire',geographie:'Geographie',sciences:'Sciences',anglais:'Anglais',programmation:'Programmation'};
+function updateTopicDescription(){
+    const v=document.getElementById('revision-topic').value;
+    document.getElementById('custom-topic-container').style.display=v==='custom'?'block':'none';
+    const d=document.getElementById('topic-description');
+    if(v&&v!=='custom'&&topicDescs[v]){d.textContent=topicDescs[v];d.style.display='block';}else d.style.display='none';
+}
+function startRevision(){
+    const v=document.getElementById('revision-topic').value; if(!v){alert('Selectionnez un sujet!');return;}
+    revTopic=v==='custom'?document.getElementById('custom-topic-input').value.trim():(topicNames[v]||v);
+    if(!revTopic){alert('Entrez un sujet!');return;}
+    revMsgs=[];
+    document.getElementById('current-revision-topic').textContent=revTopic;
+    document.getElementById('revision-chat-container').style.display='block';
+    document.getElementById('revision-messages').innerHTML='';
+    addRevMsg('assistant','Bonjour ! Pret a reviser '+revTopic+'. Que voulez-vous revoir ?');
+    document.getElementById('revision-chat-container').scrollIntoView({behavior:'smooth'});
+}
+function endRevision(){ if(confirm('Terminer la session ?')){ document.getElementById('revision-chat-container').style.display='none'; revTopic=''; revMsgs=[]; } }
+function addRevMsg(role,text){
+    const d=document.getElementById('revision-messages');
+    const m=document.createElement('div');
+    m.style.cssText='margin-bottom:1rem;padding:1rem;border-radius:0.75rem;max-width:85%;line-height:1.6;white-space:pre-wrap;'+(role==='user'?'background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;margin-left:auto;text-align:right;':'background:white;color:#1e293b;box-shadow:0 2px 8px rgba(0,0,0,0.05);');
+    if(role==='assistant') m.innerHTML='<strong style="color:#8b5cf6;">&#128640; Assistant:</strong><br>'+text; else m.textContent=text;
+    d.appendChild(m); d.scrollTop=d.scrollHeight;
+}
+async function sendRevisionMessage(){
+    const inp=document.getElementById('revision-input'); const msg=inp.value.trim(); if(!msg)return;
+    addRevMsg('user',msg); inp.value=''; revMsgs.push({role:'user',content:msg});
+    addRevMsg('assistant','...');
+    try{
+        const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:GROQ_MODEL,messages:[{role:'system',content:'Tu es un professeur expert en '+revTopic+'. Reponds en francais, avec des exemples et des emojis.'},...revMsgs],temperature:0.7,max_tokens:800})});
+        const d=document.getElementById('revision-messages'); if(d.lastChild)d.removeChild(d.lastChild);
+        if(!res.ok){addRevMsg('assistant','Erreur '+res.status);return;}
+        const data=await res.json(); const reply=data.choices?.[0]?.message?.content||'Reponse inattendue.';
+        addRevMsg('assistant',reply); revMsgs.push({role:'assistant',content:reply});
+    }catch(err){const d=document.getElementById('revision-messages');if(d.lastChild)d.removeChild(d.lastChild);addRevMsg('assistant','Erreur: '+err.message);}
+}
+
+// ── AI ASSISTANT (quiz) ───────────────────────────
+let aiVisible=false;
+window.addEventListener('load',()=>{
+    const btn=document.createElement('button');
+    btn.id='ai-assistant-btn';
+    btn.style.cssText='position:fixed;bottom:2rem;right:2rem;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);border:none;cursor:pointer;box-shadow:0 10px 30px rgba(102,126,234,0.4);display:none;align-items:center;justify-content:center;z-index:100;font-size:1.5rem;';
+    btn.innerHTML='&#128640;'; btn.onclick=toggleAI; btn.title='Assistant IA (-20% si utilise)';
+    document.body.appendChild(btn);
+    const panel=document.createElement('div');
+    panel.id='ai-panel';
+    panel.style.cssText='position:fixed;bottom:100px;right:2rem;width:360px;max-height:520px;background:white;border-radius:1rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:100;display:none;flex-direction:column;';
+    panel.innerHTML='<div style="padding:1.25rem 1.5rem;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:1rem 1rem 0 0;display:flex;justify-content:space-between;align-items:center;"><h3 style="color:white;margin:0;font-size:1rem;">&#128640; Assistant IA</h3><button onclick="toggleAI()" style="background:none;border:none;color:white;cursor:pointer;font-size:1.5rem;">&times;</button></div><div id="ai-messages" style="flex:1;overflow-y:auto;padding:1rem;max-height:330px;min-height:120px;"></div><div style="padding:1rem;border-top:1px solid #e2e8f0;"><div style="display:flex;gap:0.5rem;"><input type="text" id="ai-input" placeholder="Votre question..." style="flex:1;padding:0.75rem;border:2px solid #e2e8f0;border-radius:0.5rem;font-size:0.9rem;" onkeypress="if(event.key===\'Enter\')sendAIMessage()"><button onclick="sendAIMessage()" style="padding:0.75rem 1rem;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:0.5rem;cursor:pointer;font-weight:700;">&rarr;</button></div></div>';
+    document.body.appendChild(panel);
+    addAIMsg('assistant','Bonjour ! Je peux vous aider. Attention : chaque utilisation ajoute une penalite de -20% sur votre score.');
+});
+function toggleAI(){ aiVisible=!aiVisible; document.getElementById('ai-panel').style.display=aiVisible?'flex':'none'; }
+function addAIMsg(role,text){ const d=document.getElementById('ai-messages'); if(!d)return; const m=document.createElement('div'); m.style.cssText='margin-bottom:0.75rem;padding:0.75rem;border-radius:0.75rem;max-width:85%;font-size:0.9rem;'+(role==='user'?'background:#ede9fe;margin-left:auto;text-align:right;':'background:#f8fafc;'); m.textContent=text; d.appendChild(m); d.scrollTop=d.scrollHeight; }
+async function sendAIMessage(){
+    const inp=document.getElementById('ai-input'); if(!inp)return; const msg=inp.value.trim(); if(!msg||!state.currentQuiz)return;
+    addAIMsg('user',msg); inp.value=''; state.userData.aiHelpCount=(state.userData.aiHelpCount||0)+1;
+    const q=state.currentQuiz.questions[state.currentQuestionIndex];
+    addAIMsg('assistant','...');
+    try{
+        const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:GROQ_MODEL,messages:[{role:'user',content:'Quiz: "'+q.text+'"\nQuestion: '+msg+'\nAide sans donner la reponse directe. Reponds en francais.'}],max_tokens:400})});
+        const d=document.getElementById('ai-messages'); if(d?.lastChild)d.removeChild(d.lastChild);
+        if(!res.ok){addAIMsg('assistant','Erreur '+res.status);return;}
+        const data=await res.json(); addAIMsg('assistant',data.choices?.[0]?.message?.content||'Reponse inattendue.');
+    }catch(err){const d=document.getElementById('ai-messages');if(d?.lastChild)d.removeChild(d.lastChild);addAIMsg('assistant','Erreur: '+err.message);}
+}
+
+// ── TOAST ─────────────────────────────────────────
+function showToast(type,msg){
+    let c=document.getElementById('toast-container');
+    if(!c){c=document.createElement('div');c.id='toast-container';c.style.cssText='position:fixed;top:20px;right:20px;z-index:10000;';document.body.appendChild(c);}
+    const t=document.createElement('div');
+    const cols={success:'#22c55e',error:'#ef4444',warning:'#f97316',info:'#3b82f6'};
+    t.style.cssText='background:white;padding:1rem 1.5rem;border-radius:0.5rem;box-shadow:0 10px 30px rgba(0,0,0,0.2);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.75rem;min-width:280px;max-width:420px;border-left:4px solid '+(cols[type]||cols.info)+';';
+    t.innerHTML='<span style="font-size:1.25rem;">'+(type==='success'?'&#9989;':type==='error'?'&#10060;':type==='warning'?'&#9888;&#65039;':'&#8505;&#65039;')+'</span><span style="font-size:0.9rem;color:#1e293b;">'+msg+'</span>';
+    c.appendChild(t); setTimeout(()=>t.remove(),6000);
+}
+
+// ── CHEAT DETECTION ───────────────────────────────
+let tabSwitches=0;
+document.addEventListener('visibilitychange',()=>{
+    const adminOn=!document.getElementById('admin-view')?.classList.contains('hidden');
+    if(document.hidden&&state.currentQuiz&&!adminOn){ tabSwitches++; if(confirm('Changement d\'onglet detecte (#'+tabSwitches+'). Quiz redemarre.')){ state.currentQuestionIndex=0; state.userAnswers=[]; renderQuestion(); } }
+});
+</script>
+</body>
+</html>
